@@ -341,7 +341,8 @@ ompl_interface::ModelBasedPlanningContextPtr ompl_interface::PlanningContextMana
     context_spec.config_ = config.config;
     context_spec.planner_selector_ = getPlannerSelector();
     context_spec.constraint_sampler_manager_ = constraint_sampler_manager_;
-    context_spec.state_space_ = factory->getNewStateSpace(space_spec);
+    context_spec.state_space_ =
+        factory->getNewStateSpace(space_spec); /* only line where getNewStateSpace is called?? */
 
     // Choose the correct simple setup type to load
     context_spec.ompl_simple_setup_.reset(new ompl::geometric::SimpleSetup(context_spec.state_space_));
