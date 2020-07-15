@@ -226,6 +226,13 @@ protected:
   const ModelBasedStateSpaceFactoryPtr& getStateSpaceFactory2(const std::string& group_name,
                                                               const moveit_msgs::MotionPlanRequest& req) const;
 
+  /** \brief Check whether a joint model group has an inverse kinematics solver available. **/
+  bool doesGroupHaveIKSolver(const std::string& group_name) const;
+
+  ModelBasedStateSpacePtr selectAndCreateStateSpace(const moveit_msgs::MotionPlanRequest& req,
+                                                    const ModelBasedStateSpaceSpecification& space_spec,
+                                                    bool enforce_joint_model_state_space = false) const;
+
   /** \brief The kinematic model for which motion plans are computed */
   moveit::core::RobotModelConstPtr robot_model_;
 
