@@ -38,7 +38,6 @@
 
 #include <moveit/ompl_interface/model_based_planning_context.h>
 #include <moveit/ompl_interface/parameterization/model_based_state_space.h>
-#include <moveit/ompl_interface/parameterization/model_based_state_space_factory.h>
 #include <moveit/constraint_samplers/constraint_sampler_manager.h>
 #include <moveit/macros/class_forward.h>
 
@@ -189,30 +188,17 @@ public:
     known_planners_[planner_id] = pa;
   }
 
-  void registerStateSpaceFactory(const ModelBasedStateSpaceFactoryPtr& factory)
-  {
-    state_space_factories_[factory->getType()] = factory;
-  }
-
   const std::map<std::string, ConfiguredPlannerAllocator>& getRegisteredPlannerAllocators() const
   {
     return known_planners_;
   }
 
-  const std::map<std::string, ModelBasedStateSpaceFactoryPtr>& getRegisteredStateSpaceFactories() const
-  {
-    return state_space_factories_;
-  }
-
   ConfiguredPlannerSelector getPlannerSelector() const;
 
 protected:
-  typedef std::function<const ModelBasedStateSpaceFactoryPtr&(const std::string&)> StateSpaceFactoryTypeSelector;
-
   ConfiguredPlannerAllocator plannerSelector(const std::string& planner) const;
 
   void registerDefaultPlanners();
-  void registerDefaultStateSpaces();
 
   template <typename T>
   void registerPlannerAllocatorHelper(const std::string& planner_id);
@@ -221,11 +207,6 @@ protected:
   ModelBasedPlanningContextPtr getPlanningContext(const planning_interface::PlannerConfigurationSettings& config,
                                                   const std::string& state_space_parameterization_type,
                                                   const moveit_msgs::MotionPlanRequest& req) const;
-
-  const ModelBasedStateSpaceFactoryPtr& getStateSpaceFactory1(const std::string& group_name,
-                                                              const std::string& factory_type) const;
-  const ModelBasedStateSpaceFactoryPtr& getStateSpaceFactory2(const std::string& group_name,
-                                                              const moveit_msgs::MotionPlanRequest& req) const;
 
   /** \brief Check whether a joint model group has an inverse kinematics solver available. **/
   bool doesGroupHaveIKSolver(const std::string& group_name) const;
@@ -242,7 +223,6 @@ protected:
   constraint_samplers::ConstraintSamplerManagerPtr constraint_sampler_manager_;
 
   std::map<std::string, ConfiguredPlannerAllocator> known_planners_;
-  std::map<std::string, ModelBasedStateSpaceFactoryPtr> state_space_factories_;
 
   /** \brief All the existing planning configurations. The name
       of the configuration is the key of the map. This name can

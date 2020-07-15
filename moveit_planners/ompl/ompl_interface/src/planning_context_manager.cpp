@@ -67,9 +67,7 @@
 #include <ompl/geometric/planners/prm/SPARS.h>
 #include <ompl/geometric/planners/prm/SPARStwo.h>
 
-#include <moveit/ompl_interface/parameterization/joint_space/joint_model_state_space_factory.h>
 #include <moveit/ompl_interface/parameterization/joint_space/joint_model_state_space.h>
-#include <moveit/ompl_interface/parameterization/work_space/pose_model_state_space_factory.h>
 #include <moveit/ompl_interface/parameterization/work_space/pose_model_state_space.h>
 
 using namespace std::placeholders;
@@ -237,7 +235,6 @@ ompl_interface::PlanningContextManager::PlanningContextManager(moveit::core::Rob
 {
   cached_contexts_.reset(new CachedContexts());
   registerDefaultPlanners();
-  registerDefaultStateSpaces();
 }
 
 ompl_interface::PlanningContextManager::~PlanningContextManager() = default;
@@ -291,12 +288,6 @@ void ompl_interface::PlanningContextManager::registerDefaultPlanners()
   registerPlannerAllocatorHelper<og::SPARStwo>("geometric::SPARStwo");
   registerPlannerAllocatorHelper<og::STRIDE>("geometric::STRIDE");
   registerPlannerAllocatorHelper<og::TRRT>("geometric::TRRT");
-}
-
-void ompl_interface::PlanningContextManager::registerDefaultStateSpaces()
-{
-  registerStateSpaceFactory(ModelBasedStateSpaceFactoryPtr(new JointModelStateSpaceFactory()));
-  registerStateSpaceFactory(ModelBasedStateSpaceFactoryPtr(new PoseModelStateSpaceFactory()));
 }
 
 ompl_interface::ConfiguredPlannerSelector ompl_interface::PlanningContextManager::getPlannerSelector() const
@@ -363,50 +354,6 @@ ompl_interface::ModelBasedPlanningContextPtr ompl_interface::PlanningContextMana
   context->setSpecificationConfig(config.config);
 
   return context;
-}
-
-const ompl_interface::ModelBasedStateSpaceFactoryPtr& ompl_interface::PlanningContextManager::getStateSpaceFactory1(
-    const std::string& /* dummy */, const std::string& factory_type) const
-{
-  auto f = factory_type.empty() ? state_space_factories_.begin() : state_space_factories_.find(factory_type);
-  if (f != state_space_factories_.end())
-    return f->second;
-  else
-  {
-    ROS_ERROR_NAMED(LOGNAME, "Factory of type '%s' was not found", factory_type.c_str());
-    static const ModelBasedStateSpaceFactoryPtr EMPTY;
-    return EMPTY;
-  }
-}
-
-const ompl_interface::ModelBasedStateSpaceFactoryPtr& ompl_interface::PlanningContextManager::getStateSpaceFactory2(
-    const std::string& group, const moveit_msgs::MotionPlanRequest& req) const
-{
-  // find the problem representation to use
-  auto best = state_space_factories_.end();
-  int prev_priority = 0;
-  for (auto it = state_space_factories_.begin(); it != state_space_factories_.end(); ++it)
-  {
-    int priority = it->second->canRepresentProblem(group, req, robot_model_);
-    if (priority > prev_priority)
-    {
-      best = it;
-      prev_priority = priority;
-    }
-  }
-
-  if (best == state_space_factories_.end())
-  {
-    ROS_ERROR_NAMED(LOGNAME, "There are no known state spaces that can represent the given planning "
-                             "problem");
-    static const ModelBasedStateSpaceFactoryPtr EMPTY;
-    return EMPTY;
-  }
-  else
-  {
-    ROS_DEBUG_NAMED(LOGNAME, "Using '%s' parameterization for solving problem", best->first.c_str());
-    return best->second;
-  }
 }
 
 bool ompl_interface::PlanningContextManager::doesGroupHaveIKSolver(const std::string& group_name) const
@@ -540,7 +487,7 @@ ompl_interface::ModelBasedPlanningContextPtr ompl_interface::PlanningContextMana
   // Some planning problems like orientation path constraints are represented in PoseModelStateSpace and sampled via
   // IK. However consecutive IK solutions are not checked for proximity at the moment and sometimes happen to be
   // flipped, leading to invalid trajectories. This workaround lets the user prevent this problem by forcing rejection
-  // sampling in JointModelStateSpace. StateSpaceFactoryTypeSelector factory_selector;
+  // sampling in JointModelStateSpace.
   bool enforce_joint_model_state_space = false;
   auto it = pc->second.config.find("enforce_joint_model_state_space");
   if (it != pc->second.config.end() && boost::lexical_cast<bool>(it->second))
