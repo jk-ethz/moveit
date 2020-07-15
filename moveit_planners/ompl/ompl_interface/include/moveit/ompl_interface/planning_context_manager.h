@@ -37,6 +37,7 @@
 #pragma once
 
 #include <moveit/ompl_interface/model_based_planning_context.h>
+#include <moveit/ompl_interface/parameterization/model_based_state_space.h>
 #include <moveit/ompl_interface/parameterization/model_based_state_space_factory.h>
 #include <moveit/constraint_samplers/constraint_sampler_manager.h>
 #include <moveit/macros/class_forward.h>
@@ -218,7 +219,7 @@ protected:
 
   /** \brief This is the function that constructs new planning contexts if no previous ones exist that are suitable */
   ModelBasedPlanningContextPtr getPlanningContext(const planning_interface::PlannerConfigurationSettings& config,
-                                                  const StateSpaceFactoryTypeSelector& factory_selector,
+                                                  const std::string& state_space_parameterization_type,
                                                   const moveit_msgs::MotionPlanRequest& req) const;
 
   const ModelBasedStateSpaceFactoryPtr& getStateSpaceFactory1(const std::string& group_name,

@@ -70,6 +70,7 @@
 #include <moveit/ompl_interface/parameterization/joint_space/joint_model_state_space_factory.h>
 #include <moveit/ompl_interface/parameterization/joint_space/joint_model_state_space.h>
 #include <moveit/ompl_interface/parameterization/work_space/pose_model_state_space_factory.h>
+#include <moveit/ompl_interface/parameterization/work_space/pose_model_state_space.h>
 
 using namespace std::placeholders;
 
@@ -311,16 +312,15 @@ void ompl_interface::PlanningContextManager::setPlannerConfigurations(
 
 ompl_interface::ModelBasedPlanningContextPtr ompl_interface::PlanningContextManager::getPlanningContext(
     const planning_interface::PlannerConfigurationSettings& config,
-    const StateSpaceFactoryTypeSelector& factory_selector, const moveit_msgs::MotionPlanRequest& /*req*/) const
+    const std::string& state_space_parameterization_type, const moveit_msgs::MotionPlanRequest& req) const
 {
-  const ompl_interface::ModelBasedStateSpaceFactoryPtr& factory = factory_selector(config.group);
-
   // Check for a cached planning context
   ModelBasedPlanningContextPtr context;
 
   {
     std::unique_lock<std::mutex> slock(cached_contexts_->lock_);
-    auto cached_contexts = cached_contexts_->contexts_.find(std::make_pair(config.name, factory->getType()));
+    auto cached_contexts =
+        cached_contexts_->contexts_.find(std::make_pair(config.name, state_space_parameterization_type));
     if (cached_contexts != cached_contexts_->contexts_.end())
     {
       for (const ModelBasedPlanningContextPtr& cached_context : cached_contexts->second)
@@ -341,17 +341,14 @@ ompl_interface::ModelBasedPlanningContextPtr ompl_interface::PlanningContextMana
     context_spec.config_ = config.config;
     context_spec.planner_selector_ = getPlannerSelector();
     context_spec.constraint_sampler_manager_ = constraint_sampler_manager_;
-    context_spec.state_space_ =
-        factory->getNewStateSpace(space_spec); /* only line where getNewStateSpace is called?? */
-
-    // Choose the correct simple setup type to load
+    context_spec.state_space_ = createStateSpace(state_space_parameterization_type, space_spec);
     context_spec.ompl_simple_setup_.reset(new ompl::geometric::SimpleSetup(context_spec.state_space_));
 
     ROS_DEBUG_NAMED(LOGNAME, "Creating new planning context");
     context.reset(new ModelBasedPlanningContext(config.name, context_spec));
     {
       std::unique_lock<std::mutex> slock(cached_contexts_->lock_);
-      cached_contexts_->contexts_[std::make_pair(config.name, factory->getType())].push_back(context);
+      cached_contexts_->contexts_[std::make_pair(config.name, state_space_parameterization_type)].push_back(context);
     }
   }
 
@@ -540,20 +537,19 @@ ompl_interface::ModelBasedPlanningContextPtr ompl_interface::PlanningContextMana
   // Check if sampling in JointModelStateSpace is enforced for this group by user.
   // This is done by setting 'enforce_joint_model_state_space' to 'true' for the desired group in ompl_planning.yaml.
   //
-  // Some planning problems like orientation path constraints are represented in PoseModelStateSpace and sampled via IK.
-  // However consecutive IK solutions are not checked for proximity at the moment and sometimes happen to be flipped,
-  // leading to invalid trajectories. This workaround lets the user prevent this problem by forcing rejection sampling
-  // in JointModelStateSpace.
-  StateSpaceFactoryTypeSelector factory_selector;
+  // Some planning problems like orientation path constraints are represented in PoseModelStateSpace and sampled via
+  // IK. However consecutive IK solutions are not checked for proximity at the moment and sometimes happen to be
+  // flipped, leading to invalid trajectories. This workaround lets the user prevent this problem by forcing rejection
+  // sampling in JointModelStateSpace. StateSpaceFactoryTypeSelector factory_selector;
+  bool enforce_joint_model_state_space = false;
   auto it = pc->second.config.find("enforce_joint_model_state_space");
-
   if (it != pc->second.config.end() && boost::lexical_cast<bool>(it->second))
-    factory_selector = std::bind(&PlanningContextManager::getStateSpaceFactory1, this, std::placeholders::_1,
-                                 JointModelStateSpace::PARAMETERIZATION_TYPE);
-  else
-    factory_selector = std::bind(&PlanningContextManager::getStateSpaceFactory2, this, std::placeholders::_1, req);
+  {
+    enforce_joint_model_state_space = true;
+  }
 
-  ModelBasedPlanningContextPtr context = getPlanningContext(pc->second, factory_selector, req);
+  const std::string state_space_type = selectStateSpaceType(req, enforce_joint_model_state_space);
+  ModelBasedPlanningContextPtr context = getPlanningContext(pc->second, state_space_type, req);
 
   if (context)
   {
