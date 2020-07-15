@@ -412,71 +412,88 @@ const ompl_interface::ModelBasedStateSpaceFactoryPtr& ompl_interface::PlanningCo
   }
 }
 
-  bool ompl_interface::PlanningContextManager::doesGroupHaveIKSolver(const std::string& group_name) const
+bool ompl_interface::PlanningContextManager::doesGroupHaveIKSolver(const std::string& group_name) const
+{
+  const moveit::core::JointModelGroup* jmg = robot_model_->getJointModelGroup(group_name);
+  if (jmg)
   {
-    const moveit::core::JointModelGroup* jmg = robot_model_->getJointModelGroup(group_name);
-    if (jmg)
+    const std::pair<moveit::core::JointModelGroup::KinematicsSolver,
+                    moveit::core::JointModelGroup::KinematicsSolverMap>& ik_solver_pair = jmg->getGroupKinematics();
+    bool ik = false;
+    // check that we have a direct means to compute IK
+    if (ik_solver_pair.first)
     {
-      const std::pair<moveit::core::JointModelGroup::KinematicsSolver,
-                      moveit::core::JointModelGroup::KinematicsSolverMap>& ik_solver_pair = jmg->getGroupKinematics();
-      bool ik = false;
-      // check that we have a direct means to compute IK
-      if (ik_solver_pair.first)
-      {
-        ik = jmg->getVariableCount() == ik_solver_pair.first.bijection_.size();
-      }
-      // or an IK solver for each of the subgroups
-      else if (!ik_solver_pair.second.empty())
-      {
-        unsigned int vc = 0;
-        unsigned int bc = 0;
-        for (const auto& jt : ik_solver_pair.second)
-        {
-          vc += jt.first->getVariableCount();
-          bc += jt.second.bijection_.size();
-        }
-        if (vc == jmg->getVariableCount() && vc == bc)
-          ik = true;
-      }
-      return ik;
+      ik = jmg->getVariableCount() == ik_solver_pair.first.bijection_.size();
     }
-    else
+    // or an IK solver for each of the subgroups
+    else if (!ik_solver_pair.second.empty())
     {
-      ROS_ERROR_NAMED("planning_context_manager", "planning group '%s' not found when testing for IK Solver.",
-                      group_name.c_str());
-      return false;
+      unsigned int vc = 0;
+      unsigned int bc = 0;
+      for (const auto& jt : ik_solver_pair.second)
+      {
+        vc += jt.first->getVariableCount();
+        bc += jt.second.bijection_.size();
+      }
+      if (vc == jmg->getVariableCount() && vc == bc)
+        ik = true;
     }
+    return ik;
+  }
+  else
+  {
+    ROS_ERROR_NAMED("planning_context_manager", "planning group '%s' not found when testing for IK Solver.",
+                    group_name.c_str());
+    return false;
+  }
+}
+
+const std::string& ompl_interface::PlanningContextManager::selectStateSpaceType(
+    const moveit_msgs::MotionPlanRequest& req, bool enforce_joint_model_state_space) const
+{
+  // the user forced us to plan in joint space
+  if (enforce_joint_model_state_space)
+  {
+    return ompl_interface::JointModelStateSpace::PARAMETERIZATION_TYPE;
   }
 
-  ompl_interface::ModelBasedStateSpacePtr ompl_interface::PlanningContextManager::selectAndCreateStateSpace(
-      const moveit_msgs::MotionPlanRequest& req, const ompl_interface::ModelBasedStateSpaceSpecification& space_spec,
-      bool enforce_joint_model_state_space) const
+  // if there are joint or visibility constraints, we need to plan in joint space
+  else if (req.path_constraints.joint_constraints.empty() && req.path_constraints.visibility_constraints.empty())
   {
-    // the user forced us to plan in joint space
-    if (enforce_joint_model_state_space)
-    {
-      return std::make_shared<ompl_interface::JointModelStateSpace>(space_spec);
-    }
-
-    // if there are joint or visibility constraints, we need to plan in joint space
-    else if (req.path_constraints.joint_constraints.empty() && req.path_constraints.visibility_constraints.empty())
-    {
-      return std::make_shared<ompl_interface::JointModelStateSpace>(space_spec);
-    }
-
-    // if we have path constraints and an inverse kinematics solver, we prefer interpolating in pose space
-    else if ((!req.path_constraints.position_constraints.empty() ||
-              !req.path_constraints.orientation_constraints.empty()) &&
-             doesGroupHaveIKSolver(req.group_name))
-    {
-      return std::make_shared<ompl_interface::PoseModelStateSpace>(space_spec);
-    }
-    // in all other cases, plan in joint space
-    else
-    {
-      return std::make_shared<ompl_interface::JointModelStateSpace>(space_spec);
-    }
+    return ompl_interface::JointModelStateSpace::PARAMETERIZATION_TYPE;
   }
+
+  // if we have path constraints and an inverse kinematics solver, we prefer interpolating in pose space
+  else if ((!req.path_constraints.position_constraints.empty() ||
+            !req.path_constraints.orientation_constraints.empty()) &&
+           doesGroupHaveIKSolver(req.group_name))
+  {
+    return ompl_interface::PoseModelStateSpace::PARAMETERIZATION_TYPE;
+  }
+  // in all other cases, plan in joint space
+  else
+  {
+    return ompl_interface::JointModelStateSpace::PARAMETERIZATION_TYPE;
+  }
+}
+
+ompl_interface::ModelBasedStateSpacePtr ompl_interface::PlanningContextManager::createStateSpace(
+    const std::string& parameterization_type, const ModelBasedStateSpaceSpecification& space_spec) const
+{
+  if (parameterization_type == ompl_interface::JointModelStateSpace::PARAMETERIZATION_TYPE)
+  {
+    return std::make_shared<ompl_interface::JointModelStateSpace>(space_spec);
+  }
+  else if (parameterization_type == ompl_interface::PoseModelStateSpace::PARAMETERIZATION_TYPE)
+  {
+    return std::make_shared<ompl_interface::PoseModelStateSpace>(space_spec);
+  }
+  else
+  {
+    ROS_ERROR_NAMED("planning_context_manager", "Unkown state space parameterization type '%s'", parameterization_type);
+    return ompl_interface::ModelBasedStateSpacePtr();
+  }
+}
 
 ompl_interface::ModelBasedPlanningContextPtr ompl_interface::PlanningContextManager::getPlanningContext(
     const planning_scene::PlanningSceneConstPtr& planning_scene, const moveit_msgs::MotionPlanRequest& req,
