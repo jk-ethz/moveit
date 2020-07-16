@@ -358,7 +358,7 @@ ompl_interface::ModelBasedPlanningContextPtr ompl_interface::PlanningContextMana
     auto it = config.config.find("use_ompl_constraint_state_space");
     if (it != config.config.end() && boost::lexical_cast<bool>(it->second))
     {
-      ROS_DEBUG_STREAM("Using OMPL's constrained state space for planning.");
+      ROS_DEBUG_NAMED("planning_context_manager", "Using OMPL's constrained state space for planning.");
       context_spec.state_space_ = std::make_shared<ompl_interface::ConstrainedPlanningStateSpace>(space_spec);
       // Create a specific child of ob::Constraint for the constraint state space
       // \todo fixed x position constraints for now. Should be set based on req.path_constraints.
@@ -385,7 +385,8 @@ ompl_interface::ModelBasedPlanningContextPtr ompl_interface::PlanningContextMana
     }
     else
     {
-      ROS_DEBUG_STREAM("Using a default state space and rejection sampling for path constraints.");
+      ROS_DEBUG_NAMED("planning_context_manager",
+                      "Using a default state space and rejection sampling for path constraints.");
       // Choose the correct simple setup type to load
       context_spec.ompl_simple_setup_.reset(new ompl::geometric::SimpleSetup(context_spec.state_space_));
     }
@@ -502,9 +503,11 @@ ompl_interface::ModelBasedPlanningContextPtr ompl_interface::PlanningContextMana
 
   // bypass normal planning and use OMPL's constrained state space
   auto it1 = pc->second.config.find("use_ompl_constraint_state_space");
+  bool use_ompl_constraint_state_space = false;
   if (it1 != pc->second.config.end() && boost::lexical_cast<bool>(it1->second))
   {
     ROS_INFO_STREAM("Bypass the default state space and use OMPL's constrained state space.");
+    use_ompl_constraint_state_space = true;
   }
 
   // Check if sampling in JointModelStateSpace is enforced for this group by user.
@@ -557,7 +560,10 @@ ompl_interface::ModelBasedPlanningContextPtr ompl_interface::PlanningContextMana
     }
   }
 
-  context->setCheckPathConstraints(false);
+  if (use_ompl_constraint_state_space)
+  {
+    context->setCheckPathConstraints(false);
+  }
 
   return context;
 }
