@@ -504,7 +504,7 @@ void RobotState::setJointGroupPositions(const JointModelGroup* group, const doub
   updateMimicJoints(group);
 }
 
-void RobotState::setJointGroupPositions(const JointModelGroup* group, const Eigen::VectorXd& values)
+void RobotState::setJointGroupPositions(const JointModelGroup* group, const Eigen::Ref<const Eigen::VectorXd> values)
 {
   const std::vector<int>& il = group->getVariableIndexList();
   for (std::size_t i = 0; i < il.size(); ++i)
@@ -522,7 +522,7 @@ void RobotState::copyJointGroupPositions(const JointModelGroup* group, double* g
       gstate[i] = position_[il[i]];
 }
 
-void RobotState::copyJointGroupPositions(const JointModelGroup* group, Eigen::VectorXd& values) const
+void RobotState::copyJointGroupPositions(const JointModelGroup* group, Eigen::Ref<Eigen::VectorXd> values) const
 {
   const std::vector<int>& il = group->getVariableIndexList();
   values.resize(il.size());
@@ -543,7 +543,7 @@ void RobotState::setJointGroupVelocities(const JointModelGroup* group, const dou
   }
 }
 
-void RobotState::setJointGroupVelocities(const JointModelGroup* group, const Eigen::VectorXd& values)
+void RobotState::setJointGroupVelocities(const JointModelGroup* group, const Eigen::Ref<const Eigen::VectorXd> values)
 {
   markVelocity();
   const std::vector<int>& il = group->getVariableIndexList();
@@ -561,7 +561,7 @@ void RobotState::copyJointGroupVelocities(const JointModelGroup* group, double* 
       gstate[i] = velocity_[il[i]];
 }
 
-void RobotState::copyJointGroupVelocities(const JointModelGroup* group, Eigen::VectorXd& values) const
+void RobotState::copyJointGroupVelocities(const JointModelGroup* group, Eigen::Ref<Eigen::VectorXd> values) const
 {
   const std::vector<int>& il = group->getVariableIndexList();
   values.resize(il.size());
@@ -582,7 +582,8 @@ void RobotState::setJointGroupAccelerations(const JointModelGroup* group, const 
   }
 }
 
-void RobotState::setJointGroupAccelerations(const JointModelGroup* group, const Eigen::VectorXd& values)
+void RobotState::setJointGroupAccelerations(const JointModelGroup* group,
+                                            const Eigen::Ref<const Eigen::VectorXd> values)
 {
   markAcceleration();
   const std::vector<int>& il = group->getVariableIndexList();
@@ -600,7 +601,7 @@ void RobotState::copyJointGroupAccelerations(const JointModelGroup* group, doubl
       gstate[i] = acceleration_[il[i]];
 }
 
-void RobotState::copyJointGroupAccelerations(const JointModelGroup* group, Eigen::VectorXd& values) const
+void RobotState::copyJointGroupAccelerations(const JointModelGroup* group, Eigen::Ref<Eigen::VectorXd> values) const
 {
   const std::vector<int>& il = group->getVariableIndexList();
   values.resize(il.size());
@@ -1330,8 +1331,8 @@ bool RobotState::getJacobian(const JointModelGroup* group, const LinkModel* link
   return true;
 }
 
-bool RobotState::setFromDiffIK(const JointModelGroup* jmg, const Eigen::VectorXd& twist, const std::string& tip,
-                               double dt, const GroupStateValidityCallbackFn& constraint)
+bool RobotState::setFromDiffIK(const JointModelGroup* jmg, const Eigen::Ref<const Eigen::VectorXd> twist,
+                               const std::string& tip, double dt, const GroupStateValidityCallbackFn& constraint)
 {
   Eigen::VectorXd qdot;
   computeVariableVelocity(jmg, qdot, twist, getLinkModel(tip));
@@ -1346,8 +1347,8 @@ bool RobotState::setFromDiffIK(const JointModelGroup* jmg, const geometry_msgs::
   return setFromDiffIK(jmg, t, tip, dt, constraint);
 }
 
-void RobotState::computeVariableVelocity(const JointModelGroup* jmg, Eigen::VectorXd& qdot,
-                                         const Eigen::VectorXd& twist, const LinkModel* tip) const
+void RobotState::computeVariableVelocity(const JointModelGroup* jmg, Eigen::Ref<Eigen::VectorXd> qdot,
+                                         const Eigen::Ref<const Eigen::VectorXd> twist, const LinkModel* tip) const
 {
   // Get the Jacobian of the group at the current configuration
   Eigen::MatrixXd j(6, jmg->getVariableCount());
@@ -1387,8 +1388,8 @@ void RobotState::computeVariableVelocity(const JointModelGroup* jmg, Eigen::Vect
   qdot = jinv * twist;
 }
 
-bool RobotState::integrateVariableVelocity(const JointModelGroup* jmg, const Eigen::VectorXd& qdot, double dt,
-                                           const GroupStateValidityCallbackFn& constraint)
+bool RobotState::integrateVariableVelocity(const JointModelGroup* jmg, const Eigen::Ref<const Eigen::VectorXd> qdot,
+                                           double dt, const GroupStateValidityCallbackFn& constraint)
 {
   Eigen::VectorXd q(jmg->getVariableCount());
   copyJointGroupPositions(jmg, q);
