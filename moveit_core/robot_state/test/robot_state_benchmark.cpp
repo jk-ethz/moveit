@@ -106,6 +106,21 @@ TEST_F(Timing, stateUpdate)
   }
 }
 
+TEST_F(Timing, stateCopy)
+{
+  moveit::core::RobotModelPtr model = moveit::core::loadTestingRobotModel("fanuc");
+  ASSERT_TRUE(bool(model));
+  moveit::core::RobotState state(model);
+  moveit::core::JointModelGroup* jmg(model->getJointModelGroup("manipulator"));
+  ScopedTimer t("Copy state to Eigen vector: ");
+  Eigen::VectorXd joint_positions(6);
+  for (unsigned i = 0; i < 1e5; ++i)
+  {
+    state.setToRandomPositions();
+    state.copyJointGroupPositions(jmg, joint_positions);
+  }
+}
+
 TEST_F(Timing, multiply)
 {
   size_t runs = 1e7;
