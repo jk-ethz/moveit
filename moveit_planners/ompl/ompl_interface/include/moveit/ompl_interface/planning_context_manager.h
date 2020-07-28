@@ -211,9 +211,25 @@ protected:
   /** \brief Check whether a joint model group has an inverse kinematics solver available. **/
   bool doesGroupHaveIKSolver(const std::string& group_name) const;
 
+  /** \brief Get as suitable parameterization type of a given planning problem (joint space or Cartesian space).
+   *
+   * \param enforce_joint_model_state_space The user can enforce joint space parameterization. This is done by setting
+   * 'enforce_joint_model_state_space' to 'true' for the desired group in ompl_planning.yaml.
+   *
+   * Some planning problems like orientation path constraints are represented in PoseModelStateSpace and sampled via
+   * IK. However consecutive IK solutions are not checked for proximity at the moment and sometimes happen to be
+   * flipped, leading to invalid trajectories. This workaround lets the user prevent this problem by forcing rejection
+   * sampling in JointModelStateSpace.
+   * */
   const std::string& selectStateSpaceType(const moveit_msgs::MotionPlanRequest& req,
                                           bool enforce_joint_model_state_space = false) const;
 
+  /** \Brief Create a state space of the given parameterization type using the specifications.
+   *
+   * Supported parameterization types are:
+   * - JointModelStateSpace::PARAMETERIZATION_TYPE for joint space parameterization.
+   * - PoseModelStateSpace::PARAMETERIZATION_TYPE for Cartesian space parameterization.
+  */
   ModelBasedStateSpacePtr createStateSpace(const std::string& parameterization_type,
                                            const ModelBasedStateSpaceSpecification& space_spec) const;
 
