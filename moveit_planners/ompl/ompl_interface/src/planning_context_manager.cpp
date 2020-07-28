@@ -372,14 +372,14 @@ bool ompl_interface::PlanningContextManager::doesGroupHaveIKSolver(const std::st
     // or an IK solver for each of the subgroups
     else if (!ik_solver_pair.second.empty())
     {
-      unsigned int vc = 0;
-      unsigned int bc = 0;
+      unsigned int variable_count = 0;
+      unsigned int bijection_count = 0;
       for (const auto& jt : ik_solver_pair.second)
       {
-        vc += jt.first->getVariableCount();
-        bc += jt.second.bijection_.size();
+        variable_count += jt.first->getVariableCount();
+        bijection_count += jt.second.bijection_.size();
       }
-      if (vc == jmg->getVariableCount() && vc == bc)
+      if (variable_count == jmg->getVariableCount() && variable_count == bijection_count)
         ik = true;
     }
     return ik;
