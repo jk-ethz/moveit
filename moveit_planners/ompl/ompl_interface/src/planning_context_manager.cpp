@@ -434,7 +434,8 @@ ompl_interface::ModelBasedStateSpacePtr ompl_interface::PlanningContextManager::
   }
   else
   {
-    ROS_ERROR_NAMED("planning_context_manager", "Unkown state space parameterization type '%s'", parameterization_type);
+    ROS_ERROR_NAMED("planning_context_manager", "Unkown state space parameterization type '%s'",
+                    parameterization_type.c_str());
     return ompl_interface::ModelBasedStateSpacePtr();
   }
 }
