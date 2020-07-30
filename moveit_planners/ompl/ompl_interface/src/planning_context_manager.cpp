@@ -355,7 +355,7 @@ ompl_interface::ModelBasedPlanningContextPtr ompl_interface::PlanningContextMana
     // parameter "enforce_joint_model_state_space" is read, because this also influences
     // whether we can use a ConstrainedStateSpace
     // Choose wich state space to create
-    auto it = config.config.find("use_ompl_constraint_state_space");
+    auto it = config.config.find("use_ompl_constrained_state_space");
     if (it != config.config.end() && boost::lexical_cast<bool>(it->second))
     {
       ROS_DEBUG_NAMED("planning_context_manager", "Using OMPL's constrained state space for planning.");
@@ -502,12 +502,12 @@ ompl_interface::ModelBasedPlanningContextPtr ompl_interface::PlanningContextMana
   }
 
   // bypass normal planning and use OMPL's constrained state space
-  auto it1 = pc->second.config.find("use_ompl_constraint_state_space");
-  bool use_ompl_constraint_state_space = false;
+  auto it1 = pc->second.config.find("use_ompl_constrained_state_space");
+  bool use_ompl_constrained_state_space = false;
   if (it1 != pc->second.config.end() && boost::lexical_cast<bool>(it1->second))
   {
     ROS_INFO_STREAM("Bypass the default state space and use OMPL's constrained state space.");
-    use_ompl_constraint_state_space = true;
+    use_ompl_constrained_state_space = true;
   }
 
   // Check if sampling in JointModelStateSpace is enforced for this group by user.
@@ -560,7 +560,7 @@ ompl_interface::ModelBasedPlanningContextPtr ompl_interface::PlanningContextMana
     }
   }
 
-  if (use_ompl_constraint_state_space)
+  if (use_ompl_constrained_state_space)
   {
     context->setCheckPathConstraints(false);
   }
