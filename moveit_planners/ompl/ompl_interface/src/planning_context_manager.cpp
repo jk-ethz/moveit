@@ -549,7 +549,7 @@ ompl_interface::ModelBasedPlanningContextPtr ompl_interface::PlanningContextMana
 
     try
     {
-      context->configure(nh, use_constraints_approximation);
+      context->configure(nh, use_constraints_approximation, use_ompl_constrained_state_space);
       ROS_DEBUG_NAMED(LOGNAME, "%s: New planning context is set.", context->getName().c_str());
       error_code.val = moveit_msgs::MoveItErrorCodes::SUCCESS;
     }

@@ -76,6 +76,7 @@ void ompl_interface::ConstrainedPlanningStateSpace::copyJointToOMPLState(ompl::b
 {
   // Copy one joint (multiple variables possibly)
   // no need to cast the state as ConstrainedPlanningStateSpace also implements getValueAddressAtIndex
+  // but that is not the one that will be called here! -> fix it
   memcpy(getValueAddressAtIndex(state, ompl_state_joint_index),
          robot_state.getVariablePositions() + joint_model->getFirstVariableIndex() * sizeof(double),
          joint_model->getVariableCount() * sizeof(double));
