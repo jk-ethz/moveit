@@ -91,14 +91,17 @@ bool PositionEqualityConstraint::initialize(const moveit_msgs::Constraints& cons
                            target_orientation_);
 
   // parse what dimensions should be constrained
-  constrained_dimensions_.clear();
+  is_dim_constrained_ = { false, false, false };
   for (std::size_t dim{ 0 }; dim < 3; ++dim)
   {
     if (box.dimensions[dim] == 0.0)
     {
-      constrained_dimensions_.push_back(dim);
+      is_dim_constrained_[dim] = true;
     }
   }
+
+  link_name_ = position_constraint.link_name;
+
   return true;
 }
 
@@ -107,11 +110,28 @@ void PositionEqualityConstraint::function(const Eigen::Ref<const Eigen::VectorXd
 {
   auto position_error =
       target_orientation_.matrix().transpose() * (forwardKinematics(x).translation() - target_position_);
-  for (std::size_t dim{ 0 }; dim < getCoDimension(); ++dim)
+  for (std::size_t dim{ 0 }; dim < 3; ++dim)
   {
-    // TODO(jeroendm) The number of constraints, size of codimensions, must be changed at construction time, which is
-    // not the case yet...
-    out[dim] = position_error[constrained_dimensions_[dim]];
+    if (is_dim_constrained_[dim])
+      out[dim] = position_error[dim];
+    else
+      out[dim] = 0.0;
+  }
+}
+
+void PositionEqualityConstraint::jacobian(const Eigen::Ref<const Eigen::VectorXd>& x,
+                                          Eigen::Ref<Eigen::MatrixXd> out) const
+{
+  robot_state_->setJointGroupPositions(joint_model_group_, x);
+  Eigen::MatrixXd jacobian(6, n_);
+  bool success = robot_state_->getJacobian(joint_model_group_, joint_model_group_->getLinkModel(link_name_),
+                                           Eigen::Vector3d(0.0, 0.0, 0.0), jacobian);
+  for (std::size_t dim{ 0 }; dim < 3; ++dim)
+  {
+    if (is_dim_constrained_[dim])
+      out.row(dim) = jacobian.row(dim);
+    else
+      out.row(dim) = Eigen::VectorXd::Zero(n_).transpose();
   }
 }
 

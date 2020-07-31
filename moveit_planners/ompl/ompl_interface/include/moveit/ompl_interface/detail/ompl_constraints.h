@@ -64,11 +64,11 @@ public:
   /** OMPL's main constraint evaluation function. This must be overwritten to implement a constraint and represents the
    * constraint as function(joint_positions) = 0.
    * */
-  virtual void function(const Eigen::Ref<const Eigen::VectorXd>& x, Eigen::Ref<Eigen::VectorXd> out) const;
+  // virtual void function(const Eigen::Ref<const Eigen::VectorXd>& x, Eigen::Ref<Eigen::VectorXd> out) const;
 
   /** \brief Optionally the jacobian of the above constraint function can be implemented, which can speed up the
    * calculations. **/
-  virtual void jacobian(const Eigen::Ref<const Eigen::VectorXd>& x, Eigen::Ref<Eigen::MatrixXd> out) const;
+  // virtual void jacobian(const Eigen::Ref<const Eigen::VectorXd>& x, Eigen::Ref<Eigen::MatrixXd> out) const;
 
 protected:
   /** \brief Wrapper for forward kinematics calculated by MoveIt's Robot State.
@@ -96,7 +96,7 @@ protected:
    * For example, for position constraints on the x and z position, it would be [0, 2].
    * For orientation constraints on the first two rotation angles it would be TODO(jeroendm) [0, 1] or [3, 4].
    * */
-  std::vector<std::size_t> constrained_dimensions_;
+  std::vector<bool> is_dim_constrained_;
 
 public:
   // Macro for classes containing fixed size eigen vectors that are dynamically allocated when used.
@@ -113,6 +113,7 @@ public:
 
   virtual bool initialize(const moveit_msgs::Constraints& constraints) override;
   virtual void function(const Eigen::Ref<const Eigen::VectorXd>& x, Eigen::Ref<Eigen::VectorXd> out) const override;
+  virtual void jacobian(const Eigen::Ref<const Eigen::VectorXd>& x, Eigen::Ref<Eigen::MatrixXd> out) const override;
 };
 
 bool containsValidPositionConstraint(const moveit_msgs::Constraints& constraints);
