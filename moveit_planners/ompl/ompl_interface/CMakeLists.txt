@@ -14,6 +14,7 @@ add_library(${MOVEIT_LIB_NAME}
   src/detail/state_validity_checker.cpp
   src/detail/projection_evaluators.cpp
   src/detail/goal_union.cpp
+  src/detail/ompl_constraints.cpp
   src/detail/constraints_library.cpp
   src/detail/constrained_sampler.cpp
   src/detail/constrained_valid_state_sampler.cpp
