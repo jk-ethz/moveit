@@ -39,6 +39,7 @@
 
 #include <gtest/gtest.h>
 
+#include <moveit/robot_model_loader/robot_model_loader.h>
 #include <moveit/robot_model/robot_model.h>
 #include <moveit/robot_state/robot_state.h>
 #include <moveit/utils/robot_model_test_utils.h>
@@ -67,7 +68,10 @@ protected:
     nh_ = ros::NodeHandle("/planning_context_manager_test");
 
     // load robot
-    robot_model_ = moveit::core::loadTestingRobotModel(robot_name_);
+    // robot_model_ = moveit::core::loadTestingRobotModel(robot_name_);
+    robot_model_loader::RobotModelLoaderPtr robot_model_loader(
+        new robot_model_loader::RobotModelLoader("robot_description"));
+    robot_model_ = robot_model_loader->getModel();
     robot_state_ = std::make_shared<robot_state::RobotState>(robot_model_);
     joint_model_group_ = robot_state_->getJointModelGroup(group_name_);
     planning_scene_ = std::make_shared<planning_scene::PlanningScene>(robot_model_);
@@ -80,6 +84,7 @@ protected:
     // fill in the MotionPlanRequest with useful values
     request_.group_name = group_name_;
     request_.allowed_planning_time = 5.0;
+    request_.planner_id = "RRTConnect";
     moveit::core::RobotState start_state = getDeterministicState();
     moveit::core::robotStateToRobotStateMsg(start_state, request_.start_state);
 
@@ -118,6 +123,7 @@ protected:
     planning_interface::PlannerConfigurationSettings pconfig;
     pconfig.group = group_name_;
     pconfig.name = group_name_;
+    pconfig.config = { { "enforce_joint_model_state_space", "false" } };
 
     planning_interface::PlannerConfigurationMap pconfig_map;
     pconfig_map[pconfig.name] = pconfig;
@@ -172,18 +178,34 @@ protected:
 /***************************************************************************
  * Run all tests on the Panda robot
  * ************************************************************************/
-class PandaCopyStateTest : public LoadTestRobotBaseClass
+class PandaTests : public LoadTestRobotBaseClass
 {
 protected:
-  PandaCopyStateTest() : LoadTestRobotBaseClass("panda", "panda_arm")
+  PandaTests() : LoadTestRobotBaseClass("panda", "panda_arm")
   {
   }
 };
 
-TEST_F(PandaCopyStateTest, testStateSpaceSelection)
+TEST_F(PandaTests, testStateSpaceSelection)
 {
   testStateSpaceSelection();
 }
+
+/***************************************************************************
+ * Run all tests on the Fanuc robot
+ * ************************************************************************/
+// class FanucTests : public LoadTestRobotBaseClass
+// {
+// protected:
+//   FanucTests() : LoadTestRobotBaseClass("fanuc", "manipulator")
+//   {
+//   }
+// };
+
+// TEST_F(FanucTests, testStateSpaceSelection)
+// {
+//   testStateSpaceSelection();
+// }
 
 /***************************************************************************
  * MAIN
