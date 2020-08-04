@@ -424,17 +424,22 @@ const std::string& ompl_interface::PlanningContextManager::selectStateSpaceType(
 ompl_interface::ModelBasedStateSpacePtr ompl_interface::PlanningContextManager::createStateSpace(
     const std::string& parameterization_type, const ModelBasedStateSpaceSpecification& space_spec) const
 {
+  ompl_interface::ModelBasedStateSpacePtr state_space;
   if (parameterization_type == ompl_interface::JointModelStateSpace::PARAMETERIZATION_TYPE)
   {
-    return std::make_shared<ompl_interface::JointModelStateSpace>(space_spec);
+    state_space = std::make_shared<ompl_interface::JointModelStateSpace>(space_spec);
+    state_space->computeLocations();
+    return state_space;
   }
   else if (parameterization_type == ompl_interface::PoseModelStateSpace::PARAMETERIZATION_TYPE)
   {
-    return std::make_shared<ompl_interface::PoseModelStateSpace>(space_spec);
+    state_space = std::make_shared<ompl_interface::PoseModelStateSpace>(space_spec);
+    state_space->computeLocations();
+    return state_space;
   }
   else
   {
-    ROS_ERROR_NAMED("planning_context_manager", "Unkown state space parameterization type '%s'",
+    ROS_ERROR_NAMED(LOGNAME, "Unkown state space parameterization type '%s'. No state space created.",
                     parameterization_type.c_str());
     return ompl_interface::ModelBasedStateSpacePtr();
   }

@@ -216,10 +216,10 @@ protected:
    * \param enforce_joint_model_state_space The user can enforce joint space parameterization. This is done by setting
    * 'enforce_joint_model_state_space' to 'true' for the desired group in ompl_planning.yaml.
    *
-   * Some planning problems like orientation path constraints are represented in PoseModelStateSpace and sampled via
-   * IK. However consecutive IK solutions are not checked for proximity at the moment and sometimes happen to be
-   * flipped, leading to invalid trajectories. This workaround lets the user prevent this problem by forcing rejection
-   * sampling in JointModelStateSpace.
+   * Why would you use this feature? Some planning problems like orientation path constraints are represented in
+   * PoseModelStateSpace and sampled via IK. However consecutive IK solutions are not checked for proximity at the
+   * moment and sometimes happen to be flipped, leading to invalid trajectories. This workaround lets the user prevent
+   * this problem by forcing rejection sampling in JointModelStateSpace.
    * */
   const std::string& selectStateSpaceType(const moveit_msgs::MotionPlanRequest& req,
                                           bool enforce_joint_model_state_space = false) const;
