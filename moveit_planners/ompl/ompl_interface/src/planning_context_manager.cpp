@@ -402,7 +402,7 @@ const std::string& ompl_interface::PlanningContextManager::selectStateSpaceType(
   }
 
   // if there are joint or visibility constraints, we need to plan in joint space
-  else if (req.path_constraints.joint_constraints.empty() && req.path_constraints.visibility_constraints.empty())
+  else if (!req.path_constraints.joint_constraints.empty() && !req.path_constraints.visibility_constraints.empty())
   {
     return ompl_interface::JointModelStateSpace::PARAMETERIZATION_TYPE;
   }
