@@ -22,6 +22,7 @@ add_library(${MOVEIT_LIB_NAME}
 set_target_properties(${MOVEIT_LIB_NAME} PROPERTIES VERSION "${${PROJECT_NAME}_VERSION}")
 
 find_package(OpenMP REQUIRED)
+find_package(rostest REQUIRED)
 
 target_link_libraries(${MOVEIT_LIB_NAME} ${OMPL_LIBRARIES} ${catkin_LIBRARIES} ${Boost_LIBRARIES})
 set_target_properties(${MOVEIT_LIB_NAME} PROPERTIES COMPILE_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
@@ -51,4 +52,12 @@ if(CATKIN_ENABLE_TESTING)
   catkin_add_gtest(test_state_space test/test_state_space.cpp)
   target_link_libraries(test_state_space ${MOVEIT_LIB_NAME} ${OMPL_LIBRARIES} ${catkin_LIBRARIES} ${Boost_LIBRARIES})
   set_target_properties(test_state_space PROPERTIES LINK_FLAGS "${OpenMP_CXX_FLAGS}")
+
+  # the planning context manager needs a ROS node handle for it's creation
+  # that's why it is launched as a ROS test, although no other nodes are launched
+  add_rostest_gtest(test_planning_context_manager
+    test/test_planning_context_manager.test
+    test/test_planning_context_manager.cpp)
+  target_link_libraries(test_planning_context_manager ${MOVEIT_LIB_NAME} ${OMPL_LIBRARIES} ${catkin_LIBRARIES} ${Boost_LIBRARIES})
+  set_target_properties(test_planning_context_manager PROPERTIES LINK_FLAGS "${OpenMP_CXX_FLAGS}")
 endif()
