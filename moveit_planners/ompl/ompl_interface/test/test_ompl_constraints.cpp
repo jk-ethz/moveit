@@ -129,6 +129,7 @@ protected:
     // load robot
     robot_model_ = moveit::core::loadTestingRobotModel(robot_name_);
     robot_state_ = std::make_shared<robot_state::RobotState>(robot_model_);
+    robot_state_->setToDefaultValues();  // avoid uninitialized memory in robot state
     joint_model_group_ = robot_state_->getJointModelGroup(group_name_);
 
     // extract useful parameters for tests
