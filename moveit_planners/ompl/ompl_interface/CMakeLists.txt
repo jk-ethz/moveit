@@ -64,4 +64,9 @@ if(CATKIN_ENABLE_TESTING)
   catkin_add_gtest(test_state_validity_checker test/test_state_validity_checker.cpp)
   target_link_libraries(test_state_validity_checker ${MOVEIT_LIB_NAME} ${OMPL_LIBRARIES} ${catkin_LIBRARIES})
   set_target_properties(test_state_validity_checker PROPERTIES LINK_FLAGS "${OpenMP_CXX_FLAGS}")
+
+
+  catkin_add_gtest(test_state_validity_checker_constrained test/test_state_validity_checker_constrained.cpp)
+  target_link_libraries(test_state_validity_checker_constrained ${MOVEIT_LIB_NAME} ${OMPL_LIBRARIES} ${catkin_LIBRARIES})
+  set_target_properties(test_state_validity_checker_constrained PROPERTIES LINK_FLAGS "${OpenMP_CXX_FLAGS}")
 endif()
