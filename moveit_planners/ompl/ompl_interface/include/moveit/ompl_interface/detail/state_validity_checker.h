@@ -48,6 +48,9 @@ class ModelBasedPlanningContext;
     @brief An interface for a OMPL state validity checker*/
 class StateValidityChecker : public ompl::base::StateValidityChecker
 {
+protected:
+  using ompl::base::StateValidityChecker::isValid;
+
 public:
   StateValidityChecker(const ModelBasedPlanningContext* planning_context);
 
@@ -61,8 +64,8 @@ public:
     return isValid(state, dist, verbose_);
   }
 
-  bool isValid(const ompl::base::State* state, bool verbose) const;
-  bool isValid(const ompl::base::State* state, double& dist, bool verbose) const;
+  virtual bool isValid(const ompl::base::State* state, bool verbose) const;
+  virtual bool isValid(const ompl::base::State* state, double& dist, bool verbose) const;
 
   virtual double cost(const ompl::base::State* state) const;
   double clearance(const ompl::base::State* state) const override;
@@ -80,5 +83,46 @@ protected:
 
   collision_detection::CollisionRequest collision_request_with_cost_;
   bool verbose_;
+};
+
+/** \brief A StateValidityChecker that can handle states of type `ompl::base::ConstraintStateSpace::StateType`.
+ *
+ * We cannot not just cast the states and pass them to the isValid version of the parent class, because inside the
+ * state-validity checker, the line:
+ *
+ *     planning_context_->getOMPLStateSpace()->copyToRobotState(*robot_state, state);
+ *
+ * requires the state type to be of the constrained state space, while:
+ *
+ *     state->as<ModelBasedStateSpace::StateType>()->isValidityKnown()
+ *
+ * requires as state that can be cast as shown.
+ * Therefore this class implements specific versions of the isValid methods.
+ *
+ * In addition, we do not check the path constraints, as these are handles by the ConstrainedStateSpace.
+ **/
+class ConstrainedPlanningStateValidityChecker : public StateValidityChecker
+{
+public:
+  using StateValidityChecker::isValid;
+
+public:
+  ConstrainedPlanningStateValidityChecker(const ModelBasedPlanningContext* planning_context)
+    : StateValidityChecker(planning_context)
+  {
+  }
+
+  /** \brief Check validity for states of type ompl::base::ConstrainedStateSpace
+   *
+   * This state type is special in that it "wraps" around a normal state,
+   * which can be accessed by the getState() method. In this class we assume that this state,
+   * is of type `ompl_interface::ConstrainedPlanningStateSpace`, which inherits from
+   * `ompl_interface::ModelBasedStateSpace`.
+   *
+   * (For the actual implementation of this, look at the ompl::base::WrapperStateSpace.)
+   *
+   **/
+  virtual bool isValid(const ompl::base::State* wrapped_state, bool verbose) const override;
+  virtual bool isValid(const ompl::base::State* wrapped_state, double& dist, bool verbose) const override;
 };
 }  // namespace ompl_interface
