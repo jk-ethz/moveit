@@ -66,26 +66,92 @@ public:
   //  * START Test implementations
   //  * ************************************************************************/
 
-  void dummy()
+  void testSimpleRequest(const std::vector<double>& start, const std::vector<double>& goal)
   {
-    EXPECT_TRUE(true);
-
-    ompl_interface::PlanningContextManager pcm(robot_model_, constraint_sampler_manager_);
-
+    // create all the test specific input necessary to make the getPlanningContext call possible
     planning_interface::PlannerConfigurationSettings pconfig_settings;
     pconfig_settings.group = group_name_;
     pconfig_settings.name = group_name_;
     pconfig_settings.config = { { "enforce_joint_model_state_space", "0" }, { "use_ompl_constrained_planning", "0" } };
-    planning_interface::PlannerConfigurationMap pconfig_map{ { pconfig_settings.name, pconfig_settings } };
 
+    planning_interface::PlannerConfigurationMap pconfig_map{ { pconfig_settings.name, pconfig_settings } };
+    moveit_msgs::MoveItErrorCodes error_code;
+    planning_interface::MotionPlanRequest request = createRequest(start, goal);
+
+    // setup the planning context manager
+    ompl_interface::PlanningContextManager pcm(robot_model_, constraint_sampler_manager_);
     pcm.setPlannerConfigurations(pconfig_map);
 
-    auto request = createRequest({ 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0.1 });
-
-    moveit_msgs::MoveItErrorCodes error_code;
-
+    // see if it returns the expected planning context
     auto pc = pcm.getPlanningContext(planning_scene_, request, error_code, node_handle_, false);
 
+    EXPECT_NE(pc->getOMPLSimpleSetup(), nullptr);
+    auto ss = dynamic_cast<ompl_interface::JointModelStateSpace*>(pc->getOMPLStateSpace().get());
+    EXPECT_NE(ss, nullptr);
+  }
+
+  void testPathConstraints(const std::vector<double>& start, const std::vector<double>& goal)
+  {
+    // create all the test specific input necessary to make the getPlanningContext call possible
+    planning_interface::PlannerConfigurationSettings pconfig_settings;
+    pconfig_settings.group = group_name_;
+    pconfig_settings.name = group_name_;
+    pconfig_settings.config = { { "enforce_joint_model_state_space", "0" }, { "use_ompl_constrained_planning", "0" } };
+
+    planning_interface::PlannerConfigurationMap pconfig_map{ { pconfig_settings.name, pconfig_settings } };
+    moveit_msgs::MoveItErrorCodes error_code;
+    planning_interface::MotionPlanRequest request = createRequest(start, goal);
+
+    // create path constraints around start state, to make sure they are satisfied
+    robot_state_->setJointGroupPositions(joint_model_group_, start);
+    Eigen::Isometry3d ee_pose = robot_state_->getGlobalLinkTransform(ee_link_name_);
+    request.path_constraints.position_constraints.push_back(createPositionConstraint(
+        { ee_pose.translation().x(), ee_pose.translation().y(), ee_pose.translation().z() }, { 0.1, 0.1, 0.1 }));
+
+    // setup the planning context manager
+    ompl_interface::PlanningContextManager pcm(robot_model_, constraint_sampler_manager_);
+    pcm.setPlannerConfigurations(pconfig_map);
+
+    // see if it returns the expected planning context
+    auto pc = pcm.getPlanningContext(planning_scene_, request, error_code, node_handle_, false);
+
+    EXPECT_NE(pc->getOMPLSimpleSetup(), nullptr);
+
+    // As the joint_model_group_ has not IK solver initialized, we still get a joint model state space here,
+    // so not really a good test. TODO(jeroendm)
+    auto ss = dynamic_cast<ompl_interface::JointModelStateSpace*>(pc->getOMPLStateSpace().get());
+    EXPECT_NE(ss, nullptr);
+  }
+
+  void testOMPLConstrainedPlanning(const std::vector<double>& start, const std::vector<double>& goal)
+  {
+    // create all the test specific input necessary to make the getPlanningContext call possible
+    planning_interface::PlannerConfigurationSettings pconfig_settings;
+    pconfig_settings.group = group_name_;
+    pconfig_settings.name = group_name_;
+    pconfig_settings.config = { { "enforce_joint_model_state_space", "0" }, { "use_ompl_constrained_planning", "1" } };
+
+    planning_interface::PlannerConfigurationMap pconfig_map{ { pconfig_settings.name, pconfig_settings } };
+    moveit_msgs::MoveItErrorCodes error_code;
+    planning_interface::MotionPlanRequest request = createRequest(start, goal);
+
+    // create path constraints around start state, to make sure they are satisfied
+    robot_state_->setJointGroupPositions(joint_model_group_, start);
+    Eigen::Isometry3d ee_pose = robot_state_->getGlobalLinkTransform(ee_link_name_);
+    request.path_constraints.position_constraints.push_back(createPositionConstraint(
+        { ee_pose.translation().x(), ee_pose.translation().y(), ee_pose.translation().z() }, { 0.1, 0.1, 0.1 }));
+
+    // setup the planning context manager
+    ompl_interface::PlanningContextManager pcm(robot_model_, constraint_sampler_manager_);
+    pcm.setPlannerConfigurations(pconfig_map);
+
+    // see if it returns the expected planning context
+    auto pc = pcm.getPlanningContext(planning_scene_, request, error_code, node_handle_, false);
+
+    EXPECT_NE(pc->getOMPLSimpleSetup(), nullptr);
+
+    // As the joint_model_group_ has not IK solver initialized, we still get a joint model state space here,
+    // so not really a good test. TODO(jeroendm)
     auto ss = dynamic_cast<ompl_interface::JointModelStateSpace*>(pc->getOMPLStateSpace().get());
     EXPECT_NE(ss, nullptr);
   }
@@ -97,6 +163,7 @@ public:
 protected:
   void SetUp() override
   {
+    // create all the fixed input necessary for all planning context managers
     constraint_sampler_manager_ = std::make_shared<constraint_samplers::ConstraintSamplerManager>();
     planning_scene_ = std::make_shared<planning_scene::PlanningScene>(robot_model_);
   }
@@ -106,7 +173,8 @@ protected:
   }
 
   /** Create a planning request to plan from a given start state to a joint space goal. **/
-  planning_interface::MotionPlanRequest createRequest(const std::vector<double>& start, const std::vector<double>& goal)
+  planning_interface::MotionPlanRequest createRequest(const std::vector<double>& start,
+                                                      const std::vector<double>& goal) const
   {
     planning_interface::MotionPlanRequest request;
 
@@ -130,12 +198,42 @@ protected:
     return request;
   }
 
+  /** \brief Helper function to create a position constraint. **/
+  moveit_msgs::PositionConstraint createPositionConstraint(std::array<double, 3> position,
+                                                           std::array<double, 3> dimensions)
+  {
+    shape_msgs::SolidPrimitive box_constraint;
+    box_constraint.type = shape_msgs::SolidPrimitive::BOX;
+    box_constraint.dimensions.resize(3);
+    box_constraint.dimensions[box_constraint.BOX_X] = dimensions[0];
+    box_constraint.dimensions[box_constraint.BOX_Y] = dimensions[1];
+    box_constraint.dimensions[box_constraint.BOX_Z] = dimensions[2];
+
+    geometry_msgs::Pose box_pose;
+    box_pose.position.x = position[0];
+    box_pose.position.y = position[1];
+    box_pose.position.z = position[2];
+    box_pose.orientation.w = 1.0;
+
+    moveit_msgs::PositionConstraint position_constraint;
+    position_constraint.header.frame_id = base_link_name_;
+    position_constraint.link_name = ee_link_name_;
+    position_constraint.constraint_region.primitives.push_back(box_constraint);
+    position_constraint.constraint_region.primitive_poses.push_back(box_pose);
+
+    return position_constraint;
+  }
+
   ompl_interface::ModelBasedStateSpacePtr state_space_;
   ompl_interface::ModelBasedPlanningContextSpecification planning_context_spec_;
   ompl_interface::ModelBasedPlanningContextPtr planning_context_;
   planning_scene::PlanningScenePtr planning_scene_;
 
   constraint_samplers::ConstraintSamplerManagerPtr constraint_sampler_manager_;
+
+  /** Ideally we add an IK plugin to the joint_model_group_ to test the PoseModel state space, using the pluginlib to
+   * load the default KDL plugin? **/
+  // std::shared_ptr<kinematics::KinematicsBase> ik_plugin_;
 
   ros::NodeHandle node_handle_;
 };
@@ -151,9 +249,19 @@ protected:
   }
 };
 
-TEST_F(FanucTestPlanningContext, dummyTest)
+TEST_F(FanucTestPlanningContext, testSimpleRequest)
 {
-  dummy();
+  testSimpleRequest({ 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0.1 });
+}
+
+// TEST_F(FanucTestPlanningContext, testPathConstraints)
+// {
+//   testPathConstraints({ 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0.1 });
+// }
+
+TEST_F(FanucTestPlanningContext, testOMPLConstrainedPlanning)
+{
+  testOMPLConstrainedPlanning({ 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0.1 });
 }
 
 /***************************************************************************

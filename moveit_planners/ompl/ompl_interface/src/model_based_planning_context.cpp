@@ -45,6 +45,8 @@
 #include <moveit/ompl_interface/detail/projection_evaluators.h>
 #include <moveit/ompl_interface/detail/constraints_library.h>
 
+#include <moveit/ompl_interface/parameterization/joint_space/constrained_planning_state_space.h>
+
 #include <moveit/kinematic_constraints/utils.h>
 #include <moveit/profiler/profiler.h>
 #include <moveit/utils/lexical_casts.h>
@@ -118,11 +120,23 @@ void ompl_interface::ModelBasedPlanningContext::configure(const ros::NodeHandle&
   ompl_simple_setup_->getStateSpace()->setStateSamplerAllocator(
       std::bind(&ModelBasedPlanningContext::allocPathConstrainedSampler, this, std::placeholders::_1));
 
-  // convert the input state to the corresponding OMPL state
-  ompl::base::ScopedState<> ompl_start_state(spec_.state_space_);
-  spec_.state_space_->copyToOMPLState(ompl_start_state.get(), getCompleteInitialRobotState());
-  ompl_simple_setup_->setStartState(ompl_start_state);
-  ompl_simple_setup_->setStateValidityChecker(ob::StateValidityCheckerPtr(new StateValidityChecker(this)));
+  if (spec_.constrained_state_space_)
+  {
+    // convert the input state to the corresponding OMPL state
+    ompl::base::ScopedState<> ompl_start_state(spec_.constrained_state_space_);
+    spec_.state_space_->copyToOMPLState(ompl_start_state.get(), getCompleteInitialRobotState());
+    ompl_simple_setup_->setStartState(ompl_start_state);
+    ompl_simple_setup_->setStateValidityChecker(
+        ob::StateValidityCheckerPtr(new ConstrainedPlanningStateValidityChecker(this)));
+  }
+  else
+  {
+    // convert the input state to the corresponding OMPL state
+    ompl::base::ScopedState<> ompl_start_state(spec_.state_space_);
+    spec_.state_space_->copyToOMPLState(ompl_start_state.get(), getCompleteInitialRobotState());
+    ompl_simple_setup_->setStartState(ompl_start_state);
+    ompl_simple_setup_->setStateValidityChecker(ob::StateValidityCheckerPtr(new StateValidityChecker(this)));
+  }
 
   if (path_constraints_ && constraints_library_)
   {
