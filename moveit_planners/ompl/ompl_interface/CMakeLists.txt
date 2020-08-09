@@ -69,4 +69,8 @@ if(CATKIN_ENABLE_TESTING)
   catkin_add_gtest(test_state_validity_checker_constrained test/test_state_validity_checker_constrained.cpp)
   target_link_libraries(test_state_validity_checker_constrained ${MOVEIT_LIB_NAME} ${OMPL_LIBRARIES} ${catkin_LIBRARIES})
   set_target_properties(test_state_validity_checker_constrained PROPERTIES LINK_FLAGS "${OpenMP_CXX_FLAGS}")
+
+  catkin_add_gtest(test_planning_context_manager test/test_planning_context_manager.cpp)
+  target_link_libraries(test_planning_context_manager ${MOVEIT_LIB_NAME} ${OMPL_LIBRARIES} ${catkin_LIBRARIES})
+  set_target_properties(test_planning_context_manager PROPERTIES LINK_FLAGS "${OpenMP_CXX_FLAGS}")
 endif()
