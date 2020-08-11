@@ -41,6 +41,8 @@
 
 #include <gtest/gtest.h>
 
+#include <eigen_conversions/eigen_msg.h>
+
 #include <moveit/ompl_interface/planning_context_manager.h>
 #include <moveit/planning_scene/planning_scene.h>
 #include <moveit/planning_interface/planning_request.h>
@@ -88,6 +90,10 @@ public:
     EXPECT_NE(pc->getOMPLSimpleSetup(), nullptr);
     auto ss = dynamic_cast<ompl_interface::JointModelStateSpace*>(pc->getOMPLStateSpace().get());
     EXPECT_NE(ss, nullptr);
+
+    planning_interface::MotionPlanDetailedResponse res;
+    bool success = pc->solve(res);
+    EXPECT_TRUE(success);
   }
 
   void testPathConstraints(const std::vector<double>& start, const std::vector<double>& goal)
@@ -102,11 +108,18 @@ public:
     moveit_msgs::MoveItErrorCodes error_code;
     planning_interface::MotionPlanRequest request = createRequest(start, goal);
 
-    // create path constraints around start state, to make sure they are satisfied
+    // give it some more time, as rejection sampling of the path constraints occasionally takes some time
+    request.allowed_planning_time = 10.0;
+
+    // create path constraints around start state,  to make sure they are satisfied
     robot_state_->setJointGroupPositions(joint_model_group_, start);
     Eigen::Isometry3d ee_pose = robot_state_->getGlobalLinkTransform(ee_link_name_);
-    request.path_constraints.position_constraints.push_back(createPositionConstraint(
-        { ee_pose.translation().x(), ee_pose.translation().y(), ee_pose.translation().z() }, { 0.1, 0.1, 0.1 }));
+    geometry_msgs::Quaternion ee_orientation;
+    tf::quaternionEigenToMsg(Eigen::Quaterniond(ee_pose.rotation()), ee_orientation);
+
+    // request.path_constraints.position_constraints.push_back(createPositionConstraint(
+    //     { ee_pose.translation().x(), ee_pose.translation().y(), ee_pose.translation().z() }, { 0.1, 0.1, 0.1 }));
+    request.path_constraints.orientation_constraints.push_back(createOrientationConstraint(ee_orientation));
 
     // setup the planning context manager
     ompl_interface::PlanningContextManager pcm(robot_model_, constraint_sampler_manager_);
@@ -121,6 +134,10 @@ public:
     // so not really a good test. TODO(jeroendm)
     auto ss = dynamic_cast<ompl_interface::JointModelStateSpace*>(pc->getOMPLStateSpace().get());
     EXPECT_NE(ss, nullptr);
+
+    planning_interface::MotionPlanDetailedResponse res;
+    bool success = pc->solve(res);
+    EXPECT_TRUE(success);
   }
 
   void testOMPLConstrainedPlanning(const std::vector<double>& start, const std::vector<double>& goal)
@@ -138,8 +155,11 @@ public:
     // create path constraints around start state, to make sure they are satisfied
     robot_state_->setJointGroupPositions(joint_model_group_, start);
     Eigen::Isometry3d ee_pose = robot_state_->getGlobalLinkTransform(ee_link_name_);
-    request.path_constraints.position_constraints.push_back(createPositionConstraint(
-        { ee_pose.translation().x(), ee_pose.translation().y(), ee_pose.translation().z() }, { 0.1, 0.1, 0.1 }));
+    geometry_msgs::Quaternion ee_orientation;
+    tf::quaternionEigenToMsg(Eigen::Quaterniond(ee_pose.rotation()), ee_orientation);
+    request.path_constraints.orientation_constraints.push_back(createOrientationConstraint(ee_orientation));
+    // request.path_constraints.position_constraints.push_back(createPositionConstraint(
+    //     { ee_pose.translation().x(), ee_pose.translation().y(), ee_pose.translation().z() }, { 0.1, 0.1, 0.1 }));
 
     // setup the planning context manager
     ompl_interface::PlanningContextManager pcm(robot_model_, constraint_sampler_manager_);
@@ -202,12 +222,12 @@ protected:
   moveit_msgs::PositionConstraint createPositionConstraint(std::array<double, 3> position,
                                                            std::array<double, 3> dimensions)
   {
-    shape_msgs::SolidPrimitive box_constraint;
-    box_constraint.type = shape_msgs::SolidPrimitive::BOX;
-    box_constraint.dimensions.resize(3);
-    box_constraint.dimensions[box_constraint.BOX_X] = dimensions[0];
-    box_constraint.dimensions[box_constraint.BOX_Y] = dimensions[1];
-    box_constraint.dimensions[box_constraint.BOX_Z] = dimensions[2];
+    shape_msgs::SolidPrimitive box;
+    box.type = shape_msgs::SolidPrimitive::BOX;
+    box.dimensions.resize(3);
+    box.dimensions[shape_msgs::SolidPrimitive::BOX_X] = dimensions[0];
+    box.dimensions[shape_msgs::SolidPrimitive::BOX_Y] = dimensions[1];
+    box.dimensions[shape_msgs::SolidPrimitive::BOX_Z] = dimensions[2];
 
     geometry_msgs::Pose box_pose;
     box_pose.position.x = position[0];
@@ -218,10 +238,23 @@ protected:
     moveit_msgs::PositionConstraint position_constraint;
     position_constraint.header.frame_id = base_link_name_;
     position_constraint.link_name = ee_link_name_;
-    position_constraint.constraint_region.primitives.push_back(box_constraint);
+    position_constraint.constraint_region.primitives.push_back(box);
     position_constraint.constraint_region.primitive_poses.push_back(box_pose);
 
     return position_constraint;
+  }
+
+  moveit_msgs::OrientationConstraint createOrientationConstraint(const geometry_msgs::Quaternion& nominal_orientation)
+  {
+    moveit_msgs::OrientationConstraint oc;
+    oc.header.frame_id = base_link_name_;
+    oc.link_name = ee_link_name_;
+    oc.orientation = nominal_orientation;
+    oc.absolute_x_axis_tolerance = 0.3;
+    oc.absolute_y_axis_tolerance = 0.3;
+    oc.absolute_z_axis_tolerance = 0.3;
+
+    return oc;
   }
 
   ompl_interface::ModelBasedStateSpacePtr state_space_;
@@ -239,6 +272,29 @@ protected:
 };
 
 /***************************************************************************
+ * Run all tests on the Panda robot
+ * ************************************************************************/
+class PandaTestPlanningContext : public TestPlanningContext
+{
+protected:
+  PandaTestPlanningContext() : TestPlanningContext("panda", "panda_arm")
+  {
+  }
+};
+
+TEST_F(PandaTestPlanningContext, testSimpleRequest)
+{
+  // use the panda "ready" state from the srdf config as start state
+  // we know this state should be within limits and self-collision free
+  testSimpleRequest({ 0, -0.785, 0, -2.356, 0, 1.571, 0.785 }, { 0, -0.785, 0, -2.356, 0, 1.571, 0.685 });
+}
+
+TEST_F(PandaTestPlanningContext, testPathConstraints)
+{
+  testPathConstraints({ 0, -0.785, 0, -2.356, 0, 1.571, 0.785 }, { 0, -0.785, 0, -2.356, 0, 1.571, 0.685 });
+}
+
+/***************************************************************************
  * Run all tests on the Fanuc robot
  * ************************************************************************/
 class FanucTestPlanningContext : public TestPlanningContext
@@ -254,15 +310,15 @@ TEST_F(FanucTestPlanningContext, testSimpleRequest)
   testSimpleRequest({ 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0.1 });
 }
 
-// TEST_F(FanucTestPlanningContext, testPathConstraints)
-// {
-//   testPathConstraints({ 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0.1 });
-// }
-
-TEST_F(FanucTestPlanningContext, testOMPLConstrainedPlanning)
+TEST_F(FanucTestPlanningContext, testPathConstraints)
 {
-  testOMPLConstrainedPlanning({ 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0.1 });
+  testPathConstraints({ 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0.1 });
 }
+
+// TEST_F(FanucTestPlanningContext, testOMPLConstrainedPlanning)
+// {
+//   testOMPLConstrainedPlanning({ 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0.1 });
+// }
 
 /***************************************************************************
  * MAIN
