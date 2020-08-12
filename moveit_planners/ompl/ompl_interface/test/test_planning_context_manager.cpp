@@ -51,6 +51,7 @@
 #include <moveit/constraint_samplers/constraint_sampler_manager.h>
 
 #include <moveit/ompl_interface/parameterization/joint_space/joint_model_state_space.h>
+#include <moveit/ompl_interface/parameterization/joint_space/constrained_planning_state_space.h>
 
 /** \brief Use this flag to turn on extra output on std::cout for debugging. **/
 // constexpr bool VERBOSE{ true };
@@ -146,9 +147,24 @@ public:
     planning_interface::PlannerConfigurationSettings pconfig_settings;
     pconfig_settings.group = group_name_;
     pconfig_settings.name = group_name_;
-    pconfig_settings.config = { { "enforce_joint_model_state_space", "0" }, { "use_ompl_constrained_planning", "1" } };
+    pconfig_settings.config = { { "enforce_joint_model_state_space", "0" },
+                                { "use_ompl_constrained_planning", "1" },
+                                { "projection_evaluator", "joints(joint_1,joint_2)" },
+                                { "longest_valid_segment_fraction", "0.05" } };  //,
+    // { "default_planner_config", "RRTConnect" } };
+    // RRTConnect configuration
+    planning_interface::PlannerConfigurationSettings rrt_config;
+    rrt_config.group = group_name_;
+    rrt_config.name = group_name_ + "[RRTConnect]";
+    rrt_config.config = { { "enforce_joint_model_state_space", "0" },
+                          { "use_ompl_constrained_planning", "1" },
+                          { "projection_evaluator", "joints(joint_1,joint_2)" },
+                          { "longest_valid_segment_fraction", "0.05" },
+                          { "type", "geometric::RRTConnect" },
+                          { "range", "0.0" } };
 
-    planning_interface::PlannerConfigurationMap pconfig_map{ { pconfig_settings.name, pconfig_settings } };
+    planning_interface::PlannerConfigurationMap pconfig_map{ { pconfig_settings.name, pconfig_settings },
+                                                             { rrt_config.name, rrt_config } };
     moveit_msgs::MoveItErrorCodes error_code;
     planning_interface::MotionPlanRequest request = createRequest(start, goal);
 
@@ -161,6 +177,7 @@ public:
     // request.path_constraints.position_constraints.push_back(createPositionConstraint(
     //     { ee_pose.translation().x(), ee_pose.translation().y(), ee_pose.translation().z() }, { 0.1, 0.1, 0.1 }));
 
+    request.planner_id = "RRTConnect";
     // setup the planning context manager
     ompl_interface::PlanningContextManager pcm(robot_model_, constraint_sampler_manager_);
     pcm.setPlannerConfigurations(pconfig_map);
@@ -172,8 +189,14 @@ public:
 
     // As the joint_model_group_ has not IK solver initialized, we still get a joint model state space here,
     // so not really a good test. TODO(jeroendm)
-    auto ss = dynamic_cast<ompl_interface::JointModelStateSpace*>(pc->getOMPLStateSpace().get());
-    EXPECT_NE(ss, nullptr);
+    auto ss = dynamic_cast<ompl_interface::ConstrainedPlanningStateSpace*>(pc->getOMPLStateSpace().get());
+    ASSERT_NE(ss, nullptr);
+
+    EXPECT_EQ(ss->getDimension(), num_dofs_);
+
+    planning_interface::MotionPlanDetailedResponse res;
+    bool success = pc->solve(res);
+    EXPECT_TRUE(success);
   }
 
   // /***************************************************************************
@@ -315,10 +338,10 @@ TEST_F(FanucTestPlanningContext, testPathConstraints)
   testPathConstraints({ 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0.1 });
 }
 
-// TEST_F(FanucTestPlanningContext, testOMPLConstrainedPlanning)
-// {
-//   testOMPLConstrainedPlanning({ 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0.1 });
-// }
+TEST_F(FanucTestPlanningContext, testOMPLConstrainedPlanning)
+{
+  testOMPLConstrainedPlanning({ 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0.1 });
+}
 
 /***************************************************************************
  * MAIN

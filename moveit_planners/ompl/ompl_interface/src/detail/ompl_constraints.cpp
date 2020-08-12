@@ -159,6 +159,7 @@ Eigen::VectorXd PositionConstraint::calcError(const Eigen::Ref<const Eigen::Vect
 
 Eigen::MatrixXd PositionConstraint::calcErrorJacobian(const Eigen::Ref<const Eigen::VectorXd>& x) const
 {
+  // TODO(jeroen) is this rotation necessary?
   return target_orientation_.matrix().transpose() * robotGeometricJacobian(x).topRows(3);
 }
 
@@ -177,6 +178,81 @@ std::vector<Bounds> positionConstraintMsgToBoundVector(const moveit_msgs::Positi
   }
 
   return { { -dims[0] / 2, dims[0] / 2 }, { -dims[1] / 2, dims[1] / 2 }, { -dims[2] / 2, dims[2] / 2 } };
+}
+
+std::vector<Bounds> orientationConstraintMsgToBoundVector(const moveit_msgs::OrientationConstraint& ori_con)
+{
+  std::vector<double> dims{ ori_con.absolute_x_axis_tolerance, ori_con.absolute_y_axis_tolerance,
+                            ori_con.absolute_z_axis_tolerance };
+
+  // dimension of -1 signifies unconstrained parameter, so set to infinity
+  for (auto& dim : dims)
+  {
+    if (dim == -1)
+      dim = std::numeric_limits<double>::infinity();
+  }
+  return { { -dims[0] / 2, dims[0] / 2 }, { -dims[1] / 2, dims[1] / 2 }, { -dims[2] / 2, dims[2] / 2 } };
+}
+
+/******************************************
+ * Orientation constraints
+ * ****************************************/
+void OrientationConstraint::parseConstraintMsg(const moveit_msgs::Constraints& constraints)
+{
+  bounds_.clear();
+  bounds_ = orientationConstraintMsgToBoundVector(constraints.orientation_constraints.at(0));
+  // ROS_INFO_STREAM("Parsing angle-axis constraints");
+  // ROS_INFO_STREAM("Parsed rx / roll constraints" << bounds_[0]);
+  // ROS_INFO_STREAM("Parsed ry / pitch constraints" << bounds_[1]);
+  // ROS_INFO_STREAM("Parsed rz / yaw constraints" << bounds_[2]);
+
+  tf::quaternionMsgToEigen(constraints.orientation_constraints.at(0).orientation, target_orientation_);
+
+  link_name_ = constraints.orientation_constraints.at(0).link_name;
+}
+
+Eigen::VectorXd OrientationConstraint::calcError(const Eigen::Ref<const Eigen::VectorXd>& x) const
+{
+  // TODO(jeroendm) I'm not sure yet whether I want the error expressed in the current ee_frame, or target_frame,
+  // or world frame. This implementation expressed the error in the end-effector frame.
+  std::cout << x.transpose() << std::endl;
+  Eigen::Matrix3d orientation_difference = forwardKinematics(x).rotation().transpose() * target_orientation_;
+  Eigen::AngleAxisd aa(orientation_difference);
+  double angle = aa.angle();
+  assert(std::abs(angle) < M_PI);
+  return aa.axis() * angle;
+}
+
+// Eigen::MatrixXd OrientationConstraint::calcErrorJacobian(const Eigen::Ref<const Eigen::VectorXd>& x) const
+// {
+//   // Eigen::AngleAxisd aa{ forwardKinematics(x).rotation().transpose() * target_orientation_ };
+
+//   Eigen::AngleAxisd aa{ forwardKinematics(x).rotation() };
+//   // TODO(jeroendm)
+//   // Find out where the mysterious minus sign comes from
+//   return -angularVelocityToAngleAxis(aa.angle(), aa.axis()) * robotGeometricJacobian(x).bottomRows(3);
+// }
+
+/*********************************************
+ * Angular velocity to exponential coordinates
+ * *******************************************/
+
+Eigen::Matrix3d angularVelocityToAngleAxis(double angle, const Eigen::Vector3d& axis)
+{
+  // (short variable names to make math expression readable)
+  // calculate exponential coordinates representation from the angle axis representation
+  Eigen::Vector3d r{ axis * angle };
+
+  // put the exponential coordinates in a skew symmetric matrix
+  Eigen::Matrix3d r_skew;
+  r_skew << 0, -r[2], r[1], r[2], 0, -r[0], -r[1], r[0], 0;
+
+  // calculate the absolute value of the rotation angle as an intermediate value for the complex expression below
+  double t{ std::abs(angle) };
+
+  // calculate to 3x3 conversion matrix to convert an angular velocity into exponential coordinates
+  return Eigen::Matrix3d::Identity() - 0.5 * r_skew +
+         r_skew * r_skew / (t * t) * (1 - 0.5 * t * std::sin(t) / (1 - std::cos(t)));
 }
 
 /******************************************
@@ -218,8 +294,9 @@ std::shared_ptr<BaseConstraint> createOMPLConstraint(robot_model::RobotModelCons
   }
   else if (num_ori_con > 0)
   {
-    ROS_ERROR_NAMED(LOGNAME, "Orientation constraints not implemented yet for OMPL's constrained state space.");
-    return nullptr;
+    auto ori_con = std::make_shared<OrientationConstraint>(robot_model, group, num_dofs);
+    ori_con->init(constraints);
+    return ori_con;
   }
   else
   {
