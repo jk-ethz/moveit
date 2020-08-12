@@ -103,7 +103,9 @@ void ompl_interface::ModelBasedStateSpace::setTagSnapToSegment(double snap)
 ompl::base::State* ompl_interface::ModelBasedStateSpace::allocState() const
 {
   auto* state = new StateType();
-  state->values = new double[variable_count_];
+  // TODO(jeroendm) temporarly to value initialization of the state
+  // to avoid uninitialized memory issues in valgrind.
+  state->values = new double[variable_count_]();
   return state;
 }
 
