@@ -49,6 +49,7 @@
 
 #include <gtest/gtest.h>
 #include <Eigen/Dense>
+#include <eigen_conversions/eigen_msg.h>
 
 #include <moveit/robot_model/robot_model.h>
 #include <moveit/robot_state/robot_state.h>
@@ -78,7 +79,7 @@ constexpr unsigned int DIFFERENT_LINK_OFFSET{ 2 };
 constexpr double JAC_ERROR_TOLERANCE{ 1e-4 };
 
 /** \brief Helper function to create a specific position constraint. **/
-moveit_msgs::PositionConstraint createPositionConstraint(std::string& base_link, std::string& ee_link_name)
+moveit_msgs::PositionConstraint createPositionConstraint(std::string& base_link, std::string& ee_link)
 {
   shape_msgs::SolidPrimitive box_constraint;
   box_constraint.type = shape_msgs::SolidPrimitive::BOX;
@@ -92,11 +93,25 @@ moveit_msgs::PositionConstraint createPositionConstraint(std::string& base_link,
 
   moveit_msgs::PositionConstraint position_constraint;
   position_constraint.header.frame_id = base_link;
-  position_constraint.link_name = ee_link_name;
+  position_constraint.link_name = ee_link;
   position_constraint.constraint_region.primitives.push_back(box_constraint);
   position_constraint.constraint_region.primitive_poses.push_back(box_pose);
 
   return position_constraint;
+}
+/** \brief Helper function to create a specific orientation constraint. **/
+moveit_msgs::OrientationConstraint createOrientationConstraint(std::string& base_link, std::string& ee_link,
+                                                               const geometry_msgs::Quaternion& nominal_orientation)
+{
+  moveit_msgs::OrientationConstraint oc;
+  oc.header.frame_id = base_link;
+  oc.link_name = ee_link;
+  oc.orientation = nominal_orientation;
+  oc.absolute_x_axis_tolerance = 0.3;
+  oc.absolute_y_axis_tolerance = 0.3;
+  oc.absolute_z_axis_tolerance = 0.3;
+
+  return oc;
 }
 
 /** \brief Robot indepentent test class implementing all tests
@@ -176,6 +191,29 @@ protected:
     return jacobian;
   }
 
+  Eigen::MatrixXd numericalJacobianOrientation(const Eigen::VectorXd& q, const std::string& link_name) const
+  {
+    const double h{ 1e-6 }; /* step size for numerical derivation */
+
+    Eigen::MatrixXd jacobian = Eigen::MatrixXd::Zero(3, num_dofs_);
+
+    // helper matrix for differentiation.
+    Eigen::MatrixXd m_helper = h * Eigen::MatrixXd::Identity(num_dofs_, num_dofs_);
+
+    for (std::size_t dim{ 0 }; dim < num_dofs_; ++dim)
+    {
+      // Eigen::AngleAxisd aa{ fk(q, link_name).rotation().transpose() * constraint_->getTargetOrientation() };
+      // Eigen::AngleAxisd aa_plus_h{ fk(q + m_helper.col(dim), link_name).rotation().transpose() *
+      //                              constraint_->getTargetOrientation() };
+
+      Eigen::AngleAxisd aa{ fk(q, link_name).rotation() };
+      Eigen::AngleAxisd aa_plus_h{ fk(q + m_helper.col(dim), link_name).rotation() };
+      Eigen::Vector3d col = (aa_plus_h.axis() * aa_plus_h.angle() - aa.axis() * aa.angle()) / h;
+      jacobian.col(dim) = col;
+    }
+    return jacobian;
+  }
+
   void setPositionConstraints()
   {
     moveit_msgs::Constraints constraint_msgs;
@@ -183,6 +221,26 @@ protected:
 
     constraint_ = std::make_shared<ompl_interface::PositionConstraint>(robot_model_, group_name_, num_dofs_);
     constraint_->init(constraint_msgs);
+
+    position_constraint_assigend = true;
+  }
+
+  void setOrientationConstraints()
+  {
+    // create path constraints around the default robot state
+    robot_state_->setToDefaultValues();
+    Eigen::Isometry3d ee_pose = robot_state_->getGlobalLinkTransform(ee_link_name_);
+    geometry_msgs::Quaternion ee_orientation;
+    tf::quaternionEigenToMsg(Eigen::Quaterniond(ee_pose.rotation()), ee_orientation);
+
+    moveit_msgs::Constraints constraint_msgs;
+    constraint_msgs.orientation_constraints.push_back(
+        createOrientationConstraint(base_link_name_, ee_link_name_, ee_orientation));
+
+    constraint_ = std::make_shared<ompl_interface::OrientationConstraint>(robot_model_, group_name_, num_dofs_);
+    constraint_->init(constraint_msgs);
+
+    position_constraint_assigend = false;
   }
 
   /** \brief Test position constraints a link that is _not_ the end-effector. **/
@@ -208,7 +266,16 @@ protected:
     {
       auto q = getRandomState();
       auto jac_exact = constraint_->calcErrorJacobian(q);
-      auto jac_approx = numericalJacobianPosition(q, constraint_->getLinkName());
+
+      Eigen::MatrixXd jac_approx(3, num_dofs_);
+      if (position_constraint_assigend)
+      {
+        jac_approx = numericalJacobianPosition(q, constraint_->getLinkName());
+      }
+      else
+      {
+        jac_approx = numericalJacobianOrientation(q, constraint_->getLinkName());
+      }
 
       if (VERBOSE)
       {
@@ -343,6 +410,8 @@ protected:
   std::size_t num_dofs_;
   std::string base_link_name_;
   std::string ee_link_name_;
+
+  bool position_constraint_assigend{ false };
 };
 
 /***************************************************************************
@@ -389,6 +458,12 @@ TEST_F(PandaConstraintTest, PositionConstraintOMPLCheck)
   testOMPLProjectedStateSpaceConstruction();
 }
 
+TEST_F(PandaConstraintTest, OrientationConstraintCreation)
+{
+  SCOPED_TRACE("Panda_OrientationConstraintJacobian");
+
+  setOrientationConstraints();
+}
 /***************************************************************************
  * Run all tests on the Fanuc robot
  * ************************************************************************/
