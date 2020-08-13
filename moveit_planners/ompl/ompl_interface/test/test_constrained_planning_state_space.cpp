@@ -173,9 +173,12 @@ protected:
     }
 
     // check getValueAddressAtIndex
+    // it can only be called with an already unwrapped state,
+    // this unwrapping is either done in the constrained_state_space_ (see WrapperStateSpace in OMPL),
+    // or in copyJointToOMPLState in the implementation of ConstrainedPlanningStateSpace in MoveIt.
     for (std::size_t i = 0; i < num_dofs_; ++i)
     {
-      EXPECT_EQ(joint_positions[i], *(moveit_state_space_->getValueAddressAtIndex(ompl_state.get(), i)));
+      EXPECT_EQ(joint_positions[i], *(constrained_state_space_->getValueAddressAtIndex(ompl_state.get(), i)));
     }
   }
 

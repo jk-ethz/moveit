@@ -53,7 +53,19 @@ double* ompl_interface::ConstrainedPlanningStateSpace::getValueAddressAtIndex(om
 {
   if (index >= variable_count_)
     return nullptr;
-  return ompl_state->as<ompl::base::ConstrainedStateSpace::StateType>()->getState()->as<StateType>()->values + index;
+
+  // use dynamic casting to make our debugging live easier for now
+  auto casted_state = dynamic_cast<ompl_interface::ConstrainedPlanningStateSpace::StateType*>(ompl_state);
+  if (casted_state)
+  {
+    return casted_state->values + index;
+  }
+  else
+  {
+    ROS_ERROR_STREAM(
+        "ompl_interface::ConstrainedPlanningStateSpace::getValueAddressAtIndex: got unexpected state type!!.");
+  }
+  return nullptr;
 }
 
 void ompl_interface::ConstrainedPlanningStateSpace::copyToRobotState(moveit::core::RobotState& robot_state,
@@ -80,7 +92,8 @@ void ompl_interface::ConstrainedPlanningStateSpace::copyJointToOMPLState(ompl::b
                                                                          const moveit::core::JointModel* joint_model,
                                                                          int ompl_state_joint_index) const
 {
-  memcpy(getValueAddressAtIndex(ompl_state, ompl_state_joint_index),
+  memcpy(getValueAddressAtIndex(ompl_state->as<ompl::base::ConstrainedStateSpace::StateType>()->getState(),
+                                ompl_state_joint_index),
          robot_state.getVariablePositions() + joint_model->getFirstVariableIndex(),
          joint_model->getVariableCount() * sizeof(double));
 
