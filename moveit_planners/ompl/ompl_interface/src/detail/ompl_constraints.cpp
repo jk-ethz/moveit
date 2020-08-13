@@ -75,12 +75,13 @@ std::ostream& operator<<(std::ostream& os, const ompl_interface::Bounds& bound)
 /****************************
  * Base class for constraints
  * **************************/
-
 BaseConstraint::BaseConstraint(robot_model::RobotModelConstPtr robot_model, const std::string& group,
                                const unsigned int num_dofs, const unsigned int num_cons_)
-  : ompl::base::Constraint(num_dofs, num_cons_), robot_model_(robot_model), state_storage_(robot_model)
+  : ompl::base::Constraint(num_dofs, num_cons_)
+  , state_storage_(robot_model)
+  , joint_model_group_(robot_model->getJointModelGroup(group))
+
 {
-  joint_model_group_ = robot_model_->getJointModelGroup(group);
 }
 
 void BaseConstraint::init(const moveit_msgs::Constraints& constraints)
@@ -131,7 +132,6 @@ void BaseConstraint::jacobian(const Eigen::Ref<const Eigen::VectorXd>& joint_val
 /******************************************
  * Position constraints
  * ****************************************/
-
 void PositionConstraint::parseConstraintMsg(const moveit_msgs::Constraints& constraints)
 {
   ROS_INFO_STREAM_NAMED(LOGNAME, "Parsing position constraint for OMPL constrained state space.");
@@ -161,37 +161,6 @@ Eigen::MatrixXd PositionConstraint::calcErrorJacobian(const Eigen::Ref<const Eig
 {
   // TODO(jeroen) is this rotation necessary?
   return target_orientation_.matrix().transpose() * robotGeometricJacobian(x).topRows(3);
-}
-
-/************************************
- * MoveIt constraint message parsing
- * **********************************/
-std::vector<Bounds> positionConstraintMsgToBoundVector(const moveit_msgs::PositionConstraint& pos_con)
-{
-  auto dims = pos_con.constraint_region.primitives.at(0).dimensions;
-
-  // dimension of -1 signifies unconstrained parameter, so set to infinity
-  for (auto& dim : dims)
-  {
-    if (dim == -1)
-      dim = std::numeric_limits<double>::infinity();
-  }
-
-  return { { -dims[0] / 2, dims[0] / 2 }, { -dims[1] / 2, dims[1] / 2 }, { -dims[2] / 2, dims[2] / 2 } };
-}
-
-std::vector<Bounds> orientationConstraintMsgToBoundVector(const moveit_msgs::OrientationConstraint& ori_con)
-{
-  std::vector<double> dims{ ori_con.absolute_x_axis_tolerance, ori_con.absolute_y_axis_tolerance,
-                            ori_con.absolute_z_axis_tolerance };
-
-  // dimension of -1 signifies unconstrained parameter, so set to infinity
-  for (auto& dim : dims)
-  {
-    if (dim == -1)
-      dim = std::numeric_limits<double>::infinity();
-  }
-  return { { -dims[0] / 2, dims[0] / 2 }, { -dims[1] / 2, dims[1] / 2 }, { -dims[2] / 2, dims[2] / 2 } };
 }
 
 /******************************************
@@ -233,32 +202,40 @@ Eigen::VectorXd OrientationConstraint::calcError(const Eigen::Ref<const Eigen::V
 //   return -angularVelocityToAngleAxis(aa.angle(), aa.axis()) * robotGeometricJacobian(x).bottomRows(3);
 // }
 
-/*********************************************
- * Angular velocity to exponential coordinates
- * *******************************************/
-
-Eigen::Matrix3d angularVelocityToAngleAxis(double angle, const Eigen::Vector3d& axis)
+/************************************
+ * MoveIt constraint message parsing
+ * **********************************/
+std::vector<Bounds> positionConstraintMsgToBoundVector(const moveit_msgs::PositionConstraint& pos_con)
 {
-  // (short variable names to make math expression readable)
-  // calculate exponential coordinates representation from the angle axis representation
-  Eigen::Vector3d r{ axis * angle };
+  auto dims = pos_con.constraint_region.primitives.at(0).dimensions;
 
-  // put the exponential coordinates in a skew symmetric matrix
-  Eigen::Matrix3d r_skew;
-  r_skew << 0, -r[2], r[1], r[2], 0, -r[0], -r[1], r[0], 0;
+  // dimension of -1 signifies unconstrained parameter, so set to infinity
+  for (auto& dim : dims)
+  {
+    if (dim == -1)
+      dim = std::numeric_limits<double>::infinity();
+  }
 
-  // calculate the absolute value of the rotation angle as an intermediate value for the complex expression below
-  double t{ std::abs(angle) };
+  return { { -dims[0] / 2, dims[0] / 2 }, { -dims[1] / 2, dims[1] / 2 }, { -dims[2] / 2, dims[2] / 2 } };
+}
 
-  // calculate to 3x3 conversion matrix to convert an angular velocity into exponential coordinates
-  return Eigen::Matrix3d::Identity() - 0.5 * r_skew +
-         r_skew * r_skew / (t * t) * (1 - 0.5 * t * std::sin(t) / (1 - std::cos(t)));
+std::vector<Bounds> orientationConstraintMsgToBoundVector(const moveit_msgs::OrientationConstraint& ori_con)
+{
+  std::vector<double> dims{ ori_con.absolute_x_axis_tolerance, ori_con.absolute_y_axis_tolerance,
+                            ori_con.absolute_z_axis_tolerance };
+
+  // dimension of -1 signifies unconstrained parameter, so set to infinity
+  for (auto& dim : dims)
+  {
+    if (dim == -1)
+      dim = std::numeric_limits<double>::infinity();
+  }
+  return { { -dims[0] / 2, dims[0] / 2 }, { -dims[1] / 2, dims[1] / 2 }, { -dims[2] / 2, dims[2] / 2 } };
 }
 
 /******************************************
  * OMPL Constraints Factory
  * ****************************************/
-
 std::shared_ptr<BaseConstraint> createOMPLConstraint(robot_model::RobotModelConstPtr robot_model,
                                                      const std::string& group,
                                                      const moveit_msgs::Constraints& constraints)
@@ -304,4 +281,26 @@ std::shared_ptr<BaseConstraint> createOMPLConstraint(robot_model::RobotModelCons
     return nullptr;
   }
 }
+
+/*********************************************
+ * Angular velocity to exponential coordinates
+ * *******************************************/
+Eigen::Matrix3d angularVelocityToAngleAxis(double angle, const Eigen::Vector3d& axis)
+{
+  // (short variable names to make math expression readable)
+  // calculate exponential coordinates representation from the angle axis representation
+  Eigen::Vector3d r{ axis * angle };
+
+  // put the exponential coordinates in a skew symmetric matrix
+  Eigen::Matrix3d r_skew;
+  r_skew << 0, -r[2], r[1], r[2], 0, -r[0], -r[1], r[0], 0;
+
+  // calculate the absolute value of the rotation angle as an intermediate value for the complex expression below
+  double t{ std::abs(angle) };
+
+  // calculate to 3x3 conversion matrix to convert an angular velocity into exponential coordinates
+  return Eigen::Matrix3d::Identity() - 0.5 * r_skew +
+         r_skew * r_skew / (t * t) * (1 - 0.5 * t * std::sin(t) / (1 - std::cos(t)));
+}
+
 }  // namespace ompl_interface

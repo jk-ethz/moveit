@@ -49,6 +49,7 @@ namespace ompl_interface
 {
 MOVEIT_CLASS_FORWARD(BaseConstraint);
 MOVEIT_CLASS_FORWARD(PositionConstraint);
+MOVEIT_CLASS_FORWARD(OrientationConstraint);
 
 /** \brief Represents upper and lower bound on a scalar value (double).
  *
@@ -95,6 +96,9 @@ struct Bounds
 /** \brief Pretty printing of bounds. **/
 std::ostream& operator<<(std::ostream& os, const ompl_interface::Bounds& bound);
 
+/****************************
+ * Base class for constraints
+ * **************************/
 /** \brief Abstract base class for differen types of constraints, implementations of ompl::base::Constraint
  *
  * To create a constrained state space in OMPL, we need a model of the constraints, that can be written in the form of
@@ -191,6 +195,8 @@ public:
     return Eigen::MatrixXd::Zero(getCoDimension(), n_);
   }
 
+  // the methods below are specifically for debugging and testing
+
   /** \brief Return the link name to which the constraint is applied (mostly for debugging). **/
   const std::string& getLinkName()
   {
@@ -208,9 +214,6 @@ public:
   }
 
 protected:
-  // MoveIt's robot representation for kinematic calculations
-  robot_model::RobotModelConstPtr robot_model_;
-
   /** \brief Thread save storage of the robot state.
    *
    * The robot state is modified for kinematic calculations. As an instance of this class is possibly used in multiple
@@ -218,6 +221,11 @@ protected:
    * */
   TSStateStorage state_storage_;
   const robot_state::JointModelGroup* joint_model_group_;
+
+  // all attributes below can be considered const as soon as the constraint message is parsed
+  // but I (jeroendm) do not know how to elegantly express this in C++
+  // parsing the constraints message and passing all this data members separatly to the constructor
+  // is a solution, but it adds complexity outside this class, which is also not ideal.
 
   /** \brief Robot link the constraints are applied to. */
   std::string link_name_;
@@ -237,6 +245,9 @@ public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
 
+/******************************************
+ * Position constraints
+ * ****************************************/
 /** \brief Box shaped position constraints
  *
  * Reads bounds on x, y and z position from a position constraint
@@ -259,7 +270,9 @@ public:
   virtual Eigen::MatrixXd calcErrorJacobian(const Eigen::Ref<const Eigen::VectorXd>& x) const override;
 };
 
-MOVEIT_CLASS_FORWARD(OrientationConstraint);
+/******************************************
+ * Orientation constraints
+ * ****************************************/
 /** \brief Orientation constraints parameterized using exponential coordinates.
  *
  * An orientation constraints is modelled as a deviation from a target orientation.
@@ -300,15 +313,6 @@ public:
   // virtual Eigen::MatrixXd calcErrorJacobian(const Eigen::Ref<const Eigen::VectorXd>& x) const override;
 };
 
-/** \brief Conversion matrix to go from angular velocity in the world frame to
- * angle axis equivalent.
- *
- * Based on:
- * https://ethz.ch/content/dam/ethz/special-interest/mavt/robotics-n-intelligent-systems/rsl-dam/documents/RobotDynamics2016/RD2016script.pdf
- *
- * */
-Eigen::Matrix3d angularVelocityToAngleAxis(double angle, const Eigen::Vector3d& axis);
-
 /** \brief Extract position constraints from the MoveIt message.
  *
  * Assumes there is a single primitive of type `shape_msgs/SolidPrimitive.BOX`.
@@ -334,4 +338,13 @@ std::vector<Bounds> orientationConstraintMsgToBoundVector(const moveit_msgs::Ori
 std::shared_ptr<BaseConstraint> createOMPLConstraint(robot_model::RobotModelConstPtr robot_model,
                                                      const std::string& group,
                                                      const moveit_msgs::Constraints& constraints);
+
+/** \brief Conversion matrix to go from angular velocity in the world frame to
+ * angle axis equivalent.
+ *
+ * Based on:
+ * https://ethz.ch/content/dam/ethz/special-interest/mavt/robotics-n-intelligent-systems/rsl-dam/documents/RobotDynamics2016/RD2016script.pdf
+ *
+ * */
+Eigen::Matrix3d angularVelocityToAngleAxis(double angle, const Eigen::Vector3d& axis);
 }  // namespace ompl_interface
