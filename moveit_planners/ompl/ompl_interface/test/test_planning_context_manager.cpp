@@ -175,28 +175,28 @@ public:
     // tf::quaternionEigenToMsg(Eigen::Quaterniond(ee_pose.rotation()), ee_orientation);
     // request.path_constraints.orientation_constraints.push_back(createOrientationConstraint(ee_orientation));
     request.path_constraints.position_constraints.push_back(createPositionConstraint(
-        { ee_pose.translation().x(), ee_pose.translation().y(), ee_pose.translation().z() }, { 0.1, 0.1, 0.1 }));
+        { ee_pose.translation().x(), ee_pose.translation().y(), ee_pose.translation().z() }, { 1.0, 1.0, 1.0 }));
 
     request.planner_id = "RRTConnect";
+    // give it some more time
+    request.allowed_planning_time = 20.0;
+
     // setup the planning context manager
     ompl_interface::PlanningContextManager pcm(robot_model_, constraint_sampler_manager_);
     pcm.setPlannerConfigurations(pconfig_map);
 
-    // see if it returns the expected planning context
+    // Check if it returns the expected planning context
     auto pc = pcm.getPlanningContext(planning_scene_, request, error_code, node_handle_, false);
-
     EXPECT_NE(pc->getOMPLSimpleSetup(), nullptr);
 
-    // As the joint_model_group_ has not IK solver initialized, we still get a joint model state space here,
-    // so not really a good test. TODO(jeroendm)
     auto ss = dynamic_cast<ompl_interface::ConstrainedPlanningStateSpace*>(pc->getOMPLStateSpace().get());
     ASSERT_NE(ss, nullptr);
 
     EXPECT_EQ(ss->getDimension(), num_dofs_);
 
-    // planning_interface::MotionPlanDetailedResponse res;
-    // bool success = pc->solve(res);
-    // EXPECT_TRUE(success);
+    planning_interface::MotionPlanDetailedResponse res;
+    bool success = pc->solve(res);
+    EXPECT_TRUE(success);
   }
 
   // /***************************************************************************
