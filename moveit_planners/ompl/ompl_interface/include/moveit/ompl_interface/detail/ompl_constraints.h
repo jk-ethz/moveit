@@ -40,8 +40,8 @@
 
 #include <ompl/base/Constraint.h>
 
+#include <moveit/ompl_interface/detail/threadsafe_state_storage.h>
 #include <moveit/robot_model/robot_model.h>
-#include <moveit/robot_state/robot_state.h>
 #include <moveit_msgs/Constraints.h>
 #include <moveit/macros/class_forward.h>
 
@@ -210,7 +210,13 @@ public:
 protected:
   // MoveIt's robot representation for kinematic calculations
   robot_model::RobotModelConstPtr robot_model_;
-  robot_state::RobotStatePtr robot_state_;
+
+  /** \brief Thread save storage of the robot state.
+   *
+   * The robot state is modified for kinematic calculations. As an instance of this class is possibly used in multiple
+   * threads due to OMPL's LazeGoalSampler, we need a seperate robot state in every thread.
+   * */
+  TSStateStorage state_storage_;
   const robot_state::JointModelGroup* joint_model_group_;
 
   /** \brief Robot link the constraints are applied to. */
@@ -284,8 +290,7 @@ public:
   {
   }
 
-  void jacobian(const Eigen::Ref<const Eigen::VectorXd>& joint_values, Eigen::Ref<Eigen::MatrixXd> out) const
-  override
+  void jacobian(const Eigen::Ref<const Eigen::VectorXd>& joint_values, Eigen::Ref<Eigen::MatrixXd> out) const override
   {
     ompl::base::Constraint::jacobian(joint_values, out);
   }

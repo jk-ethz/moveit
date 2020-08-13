@@ -36,8 +36,8 @@
 
 #include <moveit/ompl_interface/detail/ompl_constraints.h>
 
+#include <moveit/ompl_interface/detail/threadsafe_state_storage.h>
 #include <moveit/robot_model/robot_model.h>
-#include <moveit/robot_state/robot_state.h>
 #include <moveit_msgs/Constraints.h>
 #include <eigen_conversions/eigen_msg.h>
 
@@ -78,12 +78,9 @@ std::ostream& operator<<(std::ostream& os, const ompl_interface::Bounds& bound)
 
 BaseConstraint::BaseConstraint(robot_model::RobotModelConstPtr robot_model, const std::string& group,
                                const unsigned int num_dofs, const unsigned int num_cons_)
-  : ompl::base::Constraint(num_dofs, num_cons_), robot_model_(std::move(robot_model))
+  : ompl::base::Constraint(num_dofs, num_cons_), robot_model_(robot_model), state_storage_(robot_model)
 {
-  // Setup Moveit's robot model for kinematic calculations
-  robot_state_.reset(new robot_state::RobotState(robot_model_));
-  robot_state_->setToDefaultValues();
-  joint_model_group_ = robot_state_->getJointModelGroup(group);
+  joint_model_group_ = robot_model_->getJointModelGroup(group);
 }
 
 void BaseConstraint::init(const moveit_msgs::Constraints& constraints)
@@ -93,18 +90,21 @@ void BaseConstraint::init(const moveit_msgs::Constraints& constraints)
 
 Eigen::Isometry3d BaseConstraint::forwardKinematics(const Eigen::Ref<const Eigen::VectorXd>& joint_values) const
 {
-  robot_state_->setJointGroupPositions(joint_model_group_, joint_values);
-  return robot_state_->getGlobalLinkTransform(link_name_);
+  moveit::core::RobotState* robot_state = state_storage_.getStateStorage();
+  robot_state->setJointGroupPositions(joint_model_group_, joint_values);
+  return robot_state->getGlobalLinkTransform(link_name_);
 }
 
 Eigen::MatrixXd BaseConstraint::robotGeometricJacobian(const Eigen::Ref<const Eigen::VectorXd>& joint_values) const
 {
-  robot_state_->setJointGroupPositions(joint_model_group_, joint_values);
+  moveit::core::RobotState* robot_state = state_storage_.getStateStorage();
+  robot_state->setJointGroupPositions(joint_model_group_, joint_values);
   Eigen::MatrixXd jacobian;
-  bool success = robot_state_->getJacobian(joint_model_group_, joint_model_group_->getLinkModel(link_name_),
-                                           Eigen::Vector3d(0.0, 0.0, 0.0), jacobian);
+  bool success = robot_state->getJacobian(joint_model_group_, joint_model_group_->getLinkModel(link_name_),
+                                          Eigen::Vector3d(0.0, 0.0, 0.0), jacobian);
   assert(success);
   return jacobian;
+  // return robot_state_->getJacobian(joint_model_group_);
 }
 
 void BaseConstraint::function(const Eigen::Ref<const Eigen::VectorXd>& joint_values,
