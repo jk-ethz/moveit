@@ -75,7 +75,8 @@ public:
     planning_interface::PlannerConfigurationSettings pconfig_settings;
     pconfig_settings.group = group_name_;
     pconfig_settings.name = group_name_;
-    pconfig_settings.config = { { "enforce_joint_model_state_space", "0" }, { "use_ompl_constrained_planning", "0" } };
+    pconfig_settings.config = { { "enforce_joint_model_state_space", "0" },
+                                { "use_ompl_constrained_state_space", "0" } };
 
     planning_interface::PlannerConfigurationMap pconfig_map{ { pconfig_settings.name, pconfig_settings } };
     moveit_msgs::MoveItErrorCodes error_code;
@@ -103,7 +104,8 @@ public:
     planning_interface::PlannerConfigurationSettings pconfig_settings;
     pconfig_settings.group = group_name_;
     pconfig_settings.name = group_name_;
-    pconfig_settings.config = { { "enforce_joint_model_state_space", "0" }, { "use_ompl_constrained_planning", "0" } };
+    pconfig_settings.config = { { "enforce_joint_model_state_space", "0" },
+                                { "use_ompl_constrained_state_space", "0" } };
 
     planning_interface::PlannerConfigurationMap pconfig_map{ { pconfig_settings.name, pconfig_settings } };
     moveit_msgs::MoveItErrorCodes error_code;
@@ -148,7 +150,7 @@ public:
     pconfig_settings.group = group_name_;
     pconfig_settings.name = group_name_;
     pconfig_settings.config = { { "enforce_joint_model_state_space", "0" },
-                                { "use_ompl_constrained_planning", "1" },
+                                { "use_ompl_constrained_state_space", "1" },
                                 { "projection_evaluator", "joints(joint_1,joint_2)" },
                                 { "longest_valid_segment_fraction", "0.05" } };  //,
     // { "default_planner_config", "RRTConnect" } };
@@ -157,7 +159,7 @@ public:
     rrt_config.group = group_name_;
     rrt_config.name = group_name_ + "[RRTConnect]";
     rrt_config.config = { { "enforce_joint_model_state_space", "0" },
-                          { "use_ompl_constrained_planning", "1" },
+                          { "use_ompl_constrained_state_space", "1" },
                           { "projection_evaluator", "joints(joint_1,joint_2)" },
                           { "longest_valid_segment_fraction", "0.05" },
                           { "type", "geometric::RRTConnect" },
@@ -297,25 +299,25 @@ protected:
 /***************************************************************************
  * Run all tests on the Panda robot
  * ************************************************************************/
-class PandaTestPlanningContext : public TestPlanningContext
-{
-protected:
-  PandaTestPlanningContext() : TestPlanningContext("panda", "panda_arm")
-  {
-  }
-};
+// class PandaTestPlanningContext : public TestPlanningContext
+// {
+// protected:
+//   PandaTestPlanningContext() : TestPlanningContext("panda", "panda_arm")
+//   {
+//   }
+// };
 
-TEST_F(PandaTestPlanningContext, testSimpleRequest)
-{
-  // use the panda "ready" state from the srdf config as start state
-  // we know this state should be within limits and self-collision free
-  testSimpleRequest({ 0, -0.785, 0, -2.356, 0, 1.571, 0.785 }, { 0, -0.785, 0, -2.356, 0, 1.571, 0.685 });
-}
+// TEST_F(PandaTestPlanningContext, testSimpleRequest)
+// {
+//   // use the panda "ready" state from the srdf config as start state
+//   // we know this state should be within limits and self-collision free
+//   testSimpleRequest({ 0, -0.785, 0, -2.356, 0, 1.571, 0.785 }, { 0, -0.785, 0, -2.356, 0, 1.571, 0.685 });
+// }
 
-TEST_F(PandaTestPlanningContext, testPathConstraints)
-{
-  testPathConstraints({ 0, -0.785, 0, -2.356, 0, 1.571, 0.785 }, { 0, -0.785, 0, -2.356, 0, 1.571, 0.685 });
-}
+// TEST_F(PandaTestPlanningContext, testPathConstraints)
+// {
+//   testPathConstraints({ 0, -0.785, 0, -2.356, 0, 1.571, 0.785 }, { 0, -0.785, 0, -2.356, 0, 1.571, 0.685 });
+// }
 
 /***************************************************************************
  * Run all tests on the Fanuc robot
@@ -328,15 +330,15 @@ protected:
   }
 };
 
-TEST_F(FanucTestPlanningContext, testSimpleRequest)
-{
-  testSimpleRequest({ 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0.1 });
-}
+// TEST_F(FanucTestPlanningContext, testSimpleRequest)
+// {
+//   testSimpleRequest({ 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0.1 });
+// }
 
-TEST_F(FanucTestPlanningContext, testPathConstraints)
-{
-  testPathConstraints({ 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0.1 });
-}
+// TEST_F(FanucTestPlanningContext, testPathConstraints)
+// {
+//   testPathConstraints({ 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0.1 });
+// }
 
 TEST_F(FanucTestPlanningContext, testOMPLConstrainedPlanning)
 {

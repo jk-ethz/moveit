@@ -72,7 +72,7 @@ struct ModelBasedPlanningContextSpecification
 
   /** \brief OMPL constrained state space to handle path constraints.
  *
- * When the parameter "use_ompl_constrained_planning" is set to true in ompl_planning.yaml,
+ * When the parameter "use_ompl_constrained_state_space" is set to true in ompl_planning.yaml,
  * the path constraints are handled by this state space.
  *
  * **Important**: because code often depents on the attribute `state_space_` to copy states from MoveIt to OMPL, we

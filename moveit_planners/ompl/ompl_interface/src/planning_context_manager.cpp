@@ -483,7 +483,7 @@ ompl_interface::ModelBasedPlanningContextPtr ompl_interface::PlanningContextMana
   }
 
   // There are 3 options for the factory_selector
-  // 1) use_ompl_constrained_planning = true
+  // 1) use_ompl_constrained_state_space = true
   //         Overrides all other settings and selects a ConstrainedPlanningStateSpace factory
   // 2) enforce_joint_model_state_space = true
   //         If 1) is false, then this one overrides the remaining settings and returns a JointModelStateSpace factory
@@ -493,11 +493,11 @@ ompl_interface::ModelBasedPlanningContextPtr ompl_interface::PlanningContextMana
   // TODO(jeroendm) simplify this overly complex process to choose between only three state spaces.
   StateSpaceFactoryTypeSelector factory_selector;
   // Check if the user wants to use an OMPL ConstrainedStateSpace for planning.
-  // This is done by setting 'use_ompl_constrained_planning' to 'true' for the desired group in ompl_planing.yaml.
+  // This is done by setting 'use_ompl_constrained_state_space' to 'true' for the desired group in ompl_planing.yaml.
   //
   // The factory_selector and normal state space factory will not be used
   // The setting 'enforce_joint_model_state_space' will be ignored.
-  auto it_uocp = pc->second.config.find("use_ompl_constrained_planning");
+  auto it_uocp = pc->second.config.find("use_ompl_constrained_state_space");
   // Check if sampling in JointModelStateSpace is enforced for this group by user.
   // This is done by setting 'enforce_joint_model_state_space' to 'true' for the desired group in ompl_planning.yaml.
   //
