@@ -236,9 +236,8 @@ std::vector<Bounds> orientationConstraintMsgToBoundVector(const moveit_msgs::Ori
 /******************************************
  * OMPL Constraints Factory
  * ****************************************/
-std::shared_ptr<BaseConstraint> createOMPLConstraint(robot_model::RobotModelConstPtr robot_model,
-                                                     const std::string& group,
-                                                     const moveit_msgs::Constraints& constraints)
+ompl::base::ConstraintPtr createOMPLConstraint(robot_model::RobotModelConstPtr robot_model, const std::string& group,
+                                               const moveit_msgs::Constraints& constraints)
 {
   std::size_t num_dofs = robot_model->getJointModelGroup(group)->getVariableCount();
   std::size_t num_pos_con = constraints.position_constraints.size();

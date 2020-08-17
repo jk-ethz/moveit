@@ -355,7 +355,7 @@ ompl_interface::ModelBasedPlanningContextPtr ompl_interface::PlanningContextMana
       ROS_DEBUG_NAMED("planning_context_manager", "Using OMPL's constrained state space for planning.");
 
       // Select the correct type of constraints based on the path constraints in the planning request.
-      ompl_interface::BaseConstraintPtr ompl_constraint =
+      ompl::base::ConstraintPtr ompl_constraint =
           ompl_interface::createOMPLConstraint(robot_model_, config.group, req.path_constraints);
 
       // Create a constrained state space of type "projected state space".
