@@ -75,6 +75,46 @@ std::ostream& operator<<(std::ostream& os, const ompl_interface::Bounds& bound)
 /****************************
  * Base class for constraints
  * **************************/
+JointLimitConstraint::JointLimitConstraint(robot_model::RobotModelConstPtr robot_model, const std::string& group,
+                                           const unsigned int num_dofs)
+  : ompl::base::Constraint(num_dofs, num_dofs)
+{
+  moveit::core::JointBoundsVector joint_model_bounds =
+      robot_model->getJointModelGroup(group)->getActiveJointModelsBounds();
+
+  for (auto& joint_bounds : joint_model_bounds)
+  {
+    assert(joint_bounds->size() == 1);
+    assert(joint_bounds->at(0).position_bounded_);
+    bounds_.push_back({ joint_bounds->at(0).min_position_, joint_bounds->at(0).max_position_ });
+    ROS_INFO_STREAM("Joint limit: " << bounds_.back());
+  }
+}
+
+void JointLimitConstraint::function(const Eigen::Ref<const Eigen::VectorXd>& joint_values,
+                                    Eigen::Ref<Eigen::VectorXd> out) const
+{
+  out.setZero();
+  for (std::size_t i{ 0 }; i < bounds_.size(); ++i)
+  {
+    out[i] = bounds_[i].penalty(joint_values[i]);
+  }
+}
+
+void JointLimitConstraint::jacobian(const Eigen::Ref<const Eigen::VectorXd>& joint_values,
+                                    Eigen::Ref<Eigen::MatrixXd> out) const
+{
+  out.setZero();  // all of-diagonal elements are always zero
+  for (std::size_t i{ 0 }; i < bounds_.size(); ++i)
+  {
+    // diagonal elements are either 0, -1 or +1
+    out(i, i) = bounds_[i].derivative(joint_values[i]);
+  }
+}
+
+/****************************
+ * Base class for constraints
+ * **************************/
 BaseConstraint::BaseConstraint(robot_model::RobotModelConstPtr robot_model, const std::string& group,
                                const unsigned int num_dofs, const unsigned int num_cons_)
   : ompl::base::Constraint(num_dofs, num_cons_)
@@ -170,10 +210,10 @@ void OrientationConstraint::parseConstraintMsg(const moveit_msgs::Constraints& c
 {
   bounds_.clear();
   bounds_ = orientationConstraintMsgToBoundVector(constraints.orientation_constraints.at(0));
-  // ROS_INFO_STREAM("Parsing angle-axis constraints");
-  // ROS_INFO_STREAM("Parsed rx / roll constraints" << bounds_[0]);
-  // ROS_INFO_STREAM("Parsed ry / pitch constraints" << bounds_[1]);
-  // ROS_INFO_STREAM("Parsed rz / yaw constraints" << bounds_[2]);
+  ROS_INFO_STREAM("Parsing angle-axis constraints");
+  ROS_INFO_STREAM("Parsed rx / roll constraints" << bounds_[0]);
+  ROS_INFO_STREAM("Parsed ry / pitch constraints" << bounds_[1]);
+  ROS_INFO_STREAM("Parsed rz / yaw constraints" << bounds_[2]);
 
   tf::quaternionMsgToEigen(constraints.orientation_constraints.at(0).orientation, target_orientation_);
 
@@ -184,12 +224,12 @@ Eigen::VectorXd OrientationConstraint::calcError(const Eigen::Ref<const Eigen::V
 {
   // TODO(jeroendm) I'm not sure yet whether I want the error expressed in the current ee_frame, or target_frame,
   // or world frame. This implementation expressed the error in the end-effector frame.
-  std::cout << x.transpose() << std::endl;
-  Eigen::Matrix3d orientation_difference = forwardKinematics(x).rotation().transpose() * target_orientation_;
-  Eigen::AngleAxisd aa(orientation_difference);
-  double angle = aa.angle();
-  assert(std::abs(angle) < M_PI);
-  return aa.axis() * angle;
+  // std::cout << x.transpose() << std::endl;
+  // Eigen::Matrix3d orientation_difference = forwardKinematics(x).rotation().transpose() * target_orientation_;
+  Eigen::AngleAxisd aa(forwardKinematics(x).rotation().transpose() * target_orientation_);
+  // double angle = aa.angle();
+  // assert(std::abs(angle) < M_PI);
+  return aa.axis() * aa.angle();
 }
 
 // Eigen::MatrixXd OrientationConstraint::calcErrorJacobian(const Eigen::Ref<const Eigen::VectorXd>& x) const
@@ -266,7 +306,12 @@ ompl::base::ConstraintPtr createOMPLConstraint(robot_model::RobotModelConstPtr r
   {
     auto pos_con = std::make_shared<PositionConstraint>(robot_model, group, num_dofs);
     pos_con->init(constraints);
-    return pos_con;
+
+    auto jl_con = std::make_shared<JointLimitConstraint>(robot_model, group, num_dofs);
+
+    ompl::base::ConstraintIntersectionPtr ci;
+    ci.reset(new ompl::base::ConstraintIntersection(num_dofs, { pos_con, jl_con }));
+    return ci;
   }
   else if (num_ori_con > 0)
   {
