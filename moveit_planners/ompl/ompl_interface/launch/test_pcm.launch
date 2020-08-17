@@ -1,0 +1,3 @@
+<launch>
+  <node name="test_planning_context_manager" pkg="moveit_planners_ompl" type="test_planning_context_manager" output="screen" />
+</launch>
