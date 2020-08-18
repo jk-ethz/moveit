@@ -222,13 +222,10 @@ void OrientationConstraint::parseConstraintMsg(const moveit_msgs::Constraints& c
 
 Eigen::VectorXd OrientationConstraint::calcError(const Eigen::Ref<const Eigen::VectorXd>& x) const
 {
-  // TODO(jeroendm) I'm not sure yet whether I want the error expressed in the current ee_frame, or target_frame,
-  // or world frame. This implementation expressed the error in the end-effector frame.
-  // std::cout << x.transpose() << std::endl;
-  // Eigen::Matrix3d orientation_difference = forwardKinematics(x).rotation().transpose() * target_orientation_;
-  Eigen::AngleAxisd aa(forwardKinematics(x).rotation().transpose() * target_orientation_);
-  // double angle = aa.angle();
-  // assert(std::abs(angle) < M_PI);
+  Eigen::Matrix3d orientation_difference = forwardKinematics(x).rotation().transpose() * target_orientation_;
+  Eigen::AngleAxisd aa(orientation_difference);
+  // the direct version below does not work
+  // Eigen::AngleAxisd aa(forwardKinematics(x).rotation().transpose() * target_orientation_);
   return aa.axis() * aa.angle();
 }
 
