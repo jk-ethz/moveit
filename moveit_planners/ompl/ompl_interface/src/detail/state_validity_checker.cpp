@@ -241,6 +241,14 @@ bool ompl_interface::ConstrainedPlanningStateValidityChecker::isValid(const ompl
   // do not use the unwrapped state here, as copyToRobotState expects a state of type ConstrainedStateSpace::StateType
   planning_context_->getOMPLStateSpace()->copyToRobotState(*robot_state, wrapped_state);
 
+  // check path constraints
+  const kinematic_constraints::KinematicConstraintSetPtr& kset = planning_context_->getPathConstraints();
+  if (kset && !kset->decide(*robot_state, verbose).satisfied)
+  {
+    const_cast<ob::State*>(state)->as<ModelBasedStateSpace::StateType>()->markInvalid();
+    return false;
+  }
+
   // check feasibility
   if (!planning_context_->getPlanningScene()->isStateFeasible(*robot_state, verbose))
   {
@@ -287,6 +295,14 @@ bool ompl_interface::ConstrainedPlanningStateValidityChecker::isValid(const ompl
   // this is where the copy method that handles constrained states will be called
   // but if I already converted the state upfront, it will not work.
   planning_context_->getOMPLStateSpace()->copyToRobotState(*robot_state, state);
+
+  // check path constraints
+  const kinematic_constraints::KinematicConstraintSetPtr& kset = planning_context_->getPathConstraints();
+  if (kset && !kset->decide(*robot_state, verbose).satisfied)
+  {
+    const_cast<ob::State*>(state)->as<ModelBasedStateSpace::StateType>()->markInvalid();
+    return false;
+  }
 
   // check feasibility
   if (!planning_context_->getPlanningScene()->isStateFeasible(*robot_state, verbose))
