@@ -64,7 +64,7 @@
 #include <ompl/base/ConstrainedSpaceInformation.h>
 
 /** \brief Number of times to run a test that uses randomly generated input. **/
-constexpr int NUM_RANDOM_TESTS{ 10 };
+constexpr int NUM_RANDOM_TESTS{ 100 };
 
 /** \brief For failing tests, some extra print statements are useful. **/
 constexpr bool VERBOSE{ false };
@@ -79,7 +79,12 @@ constexpr unsigned int DIFFERENT_LINK_OFFSET{ 2 };
  **/
 constexpr double JAC_ERROR_TOLERANCE{ 1e-4 };
 
-/** \brief Helper function to create a specific position constraint. **/
+/** \brief Helper function to create a specific position constraint.
+ *
+ * These constraints are fixed for the fanuc robot dimensions for now.
+ * This function should take input so we can change them to something specific to the robot's workspace.
+ *
+ * **/
 moveit_msgs::PositionConstraint createPositionConstraint(std::string& base_link, std::string& ee_link)
 {
   shape_msgs::SolidPrimitive box_constraint;
@@ -330,8 +335,13 @@ protected:
 
     state_space->setBounds(bounds);
 
-    auto constrained_state_space = std::make_shared<ompl::base::ProjectedStateSpace>(state_space, constraint_);
+    // auto jl_con = std::make_shared<ompl_interface::JointLimitConstraint>(robot_model_, group_name_, num_dofs_);
+    // auto ci = std::make_shared<ompl::base::ConstraintIntersection>(num_dofs_, { constraint_ });
+    // ompl::base::ConstraintIntersectionPtr ci;
+    // ci.reset(new ompl::base::ConstraintIntersection(num_dofs_, { constraint_, jl_con }));
+    // auto constrained_state_space = std::make_shared<ompl::base::ProjectedStateSpace>(state_space, ci);
 
+    auto constrained_state_space = std::make_shared<ompl::base::ProjectedStateSpace>(state_space, constraint_);
     // constrained_state_space->setStateSamplerAllocator()
 
     auto constrained_state_space_info =
@@ -352,11 +362,23 @@ protected:
     }
   }
 
+  /** \brief Compare difference with adding joint limits as constraints.
+   *
+   * Two cases:
+   * 1) No joint limits added to constraints
+   *   a) projection success (before enforcing bounds)
+   *   b) is it still a succes after enforcing the bounds?
+   *
+   * 2) Add joint limits as constraints
+   *   c) projection success
+   *
+   * **/
   void testOMPLStateSampler()
   {
+    // Create the ambient state space
+    // ------------------------------
     auto state_space = std::make_shared<ompl::base::RealVectorStateSpace>(num_dofs_);
     ompl::base::RealVectorBounds bounds(num_dofs_);
-
     // get joint limits from the joint model group
     auto joint_limits = joint_model_group_->getActiveJointModelsBounds();
     EXPECT_EQ(joint_limits.size(), num_dofs_);
@@ -366,58 +388,100 @@ protected:
       bounds.setLow(i, joint_limits[i]->at(0).min_position_);
       bounds.setHigh(i, joint_limits[i]->at(0).max_position_);
     }
-
     state_space->setBounds(bounds);
 
-    auto constrained_state_space = std::make_shared<ompl::base::ProjectedStateSpace>(state_space, constraint_);
+    // Created the constraint models
+    //------------------------------
+    // position constraints
+    setPositionConstraints();  // sets up constraint_
+    // joint limit constraints
+    auto jl_con = std::make_shared<ompl_interface::JointLimitConstraint>(robot_model_, group_name_, num_dofs_);
+    ompl::base::ConstraintIntersectionPtr ci;
+    ci.reset(new ompl::base::ConstraintIntersection(num_dofs_, { constraint_, jl_con }));
 
+    // Create the constraint state space
+    // ---------------------------------
+    auto constrained_state_space = std::make_shared<ompl::base::ProjectedStateSpace>(state_space, ci);
     auto constrained_state_space_info =
         std::make_shared<ompl::base::ConstrainedSpaceInformation>(constrained_state_space);
 
-    ompl::base::StateSamplerPtr ss = constrained_state_space->allocStateSampler();
+    // ompl::base::StateSamplerPtr ss = constrained_state_space->allocStateSampler();
     ompl::base::StateSamplerPtr rvss = state_space->allocStateSampler();
 
+    // bool proj_succes{ false };
+    // Eigen::VectorXd error(3);
+    // int a_counter{ 0 };  // projection succes
+    // int b_counter{ 0 };  // constraint satisfaction after enforcing bounds
+
+    // for (int i{ 0 }; i < NUM_RANDOM_TESTS; ++i)
+    // {
+    //   auto* s1 = constrained_state_space->allocState()->as<ompl::base::ConstrainedStateSpace::StateType>();
+
+    //   // use unconstrained sampling and manually project it to see the difference.
+    //   rvss->sampleUniform(s1->getState());
+    //   // proj_succes = constraint_->project(s1);
+    //   proj_succes = ci->project(s1);
+    //   if (proj_succes)
+    //   {
+    //     a_counter++;
+
+    //     // success, so now enforce the bounds
+    //     constrained_state_space->enforceBounds(s1);
+    //     Eigen::VectorXd q_clipped = *s1;
+    //     constraint_->function(q_clipped, error);
+    //     // ROS_INFO_STREAM("Constrained error: " << error.transpose());
+    //     if (error.squaredNorm() < constraint_->getTolerance())
+    //     {
+    //       b_counter++;
+    //     }
+    //   }
+    //   constrained_state_space->freeState(s1);
+    // }
+
+    constraint_->setMaxIterations(100);
+    ci->setMaxIterations(100);
+
+    ROS_INFO_STREAM("Only position constraints:");
+    printSampleSuccessRates(constraint_, constrained_state_space, rvss);
+    ROS_INFO_STREAM("With added joint limit constraints:");
+    printSampleSuccessRates(ci, constrained_state_space, rvss);
+  }
+
+  void printSampleSuccessRates(const ompl::base::ConstraintPtr& con, const ompl::base::ConstrainedStateSpacePtr& css,
+                               const ompl::base::StateSamplerPtr& sampler)
+  {
     bool proj_succes{ false };
     Eigen::VectorXd error(3);
-
-    int failed_counter{ 0 };
+    int a_counter{ 0 };  // projection succes
+    int b_counter{ 0 };  // constraint satisfaction after enforcing bounds
 
     for (int i{ 0 }; i < NUM_RANDOM_TESTS; ++i)
     {
-      auto* s1 = constrained_state_space->allocState()->as<ompl::base::ConstrainedStateSpace::StateType>();
-      // ss->sampleUniform(s1);
-      // Eigen::VectorXd qi = *s1;
+      auto* s1 = css->allocState()->as<ompl::base::ConstrainedStateSpace::StateType>();
 
       // use unconstrained sampling and manually project it to see the difference.
-      rvss->sampleUniform(s1->getState());
-      Eigen::VectorXd qi = *s1;
-
-      proj_succes = constraint_->project(s1);
-
-      if (!proj_succes)
+      sampler->sampleUniform(s1->getState());
+      // proj_succes = constraint_->project(s1);
+      proj_succes = con->project(s1);
+      if (proj_succes)
       {
-        ROS_ERROR_STREAM("Failed to project state.");
-        failed_counter++;
+        a_counter++;
+
+        // success, so now enforce the bounds
+        css->enforceBounds(s1);
+        Eigen::VectorXd q_clipped = *s1;
+        constraint_->function(q_clipped, error);
+        // ROS_INFO_STREAM("Constrained error: " << error.transpose());
+        if (error.squaredNorm() < constraint_->getTolerance())
+        {
+          b_counter++;
+        }
       }
-      qi = *s1;
-      constraint_->function(qi, error);
-      if (VERBOSE)
-        ROS_INFO_STREAM("Position error (before enforce bouns): " << error.transpose());
-
-      constrained_state_space->enforceBounds(s1);
-      qi = *s1;
-      constraint_->function(qi, error);
-      if (VERBOSE)
-        ROS_INFO_STREAM("Position error: " << error.transpose());
-
-      // Eigen::VectorXd pos = constraint_->forwardKinematics(qi).translation();
-      // ROS_ERROR_STREAM("Joint values: " << qi.transpose());
-
-      constrained_state_space->freeState(s1);
+      css->freeState(s1);
     }
 
-    if (VERBOSE)
-      ROS_INFO_STREAM("Projection faild in " << failed_counter << "/" << NUM_RANDOM_TESTS << " cases.");
+    ROS_INFO_STREAM("Projection succes: " << a_counter << "/" << NUM_RANDOM_TESTS);
+    ROS_INFO_STREAM("Bounds enforcing: " << b_counter << "/" << NUM_RANDOM_TESTS);
   }
 
 protected:
@@ -440,53 +504,52 @@ protected:
 /***************************************************************************
  * Run all tests on the Panda robot
  * ************************************************************************/
-// class PandaConstraintTest : public ConstraintTestBaseClass
-// {
-// protected:
-//   PandaConstraintTest() : ConstraintTestBaseClass("panda", "panda_arm")
-//   {
-//   }
-// };
+class PandaConstraintTest : public ConstraintTestBaseClass
+{
+protected:
+  PandaConstraintTest() : ConstraintTestBaseClass("panda", "panda_arm")
+  {
+  }
+};
 
-// TEST_F(PandaConstraintTest, InitPositionConstraint)
-// {
-//   SCOPED_TRACE("Panda_InitPositionConstraint");
+TEST_F(PandaConstraintTest, InitPositionConstraint)
+{
+  SCOPED_TRACE("Panda_InitPositionConstraint");
 
-//   setPositionConstraints();
-//   setPositionConstraintsDifferentLink();
-// }
+  setPositionConstraints();
+  setPositionConstraintsDifferentLink();
+}
 
-// TEST_F(PandaConstraintTest, PositionConstraintJacobian)
-// {
-//   SCOPED_TRACE("Panda_PositionConstraintJacobian");
+TEST_F(PandaConstraintTest, PositionConstraintJacobian)
+{
+  SCOPED_TRACE("Panda_PositionConstraintJacobian");
 
-//   setPositionConstraints();
-//   testJacobian();
+  setPositionConstraints();
+  testJacobian();
 
-//   constraint_.reset();
-//   setPositionConstraintsDifferentLink();
-//   testJacobian();
-// }
+  constraint_.reset();
+  setPositionConstraintsDifferentLink();
+  testJacobian();
+}
 
-// TEST_F(PandaConstraintTest, PositionConstraintOMPLCheck)
-// {
-//   SCOPED_TRACE("Panda_PositionConstraintOMPLCheck");
+TEST_F(PandaConstraintTest, PositionConstraintOMPLCheck)
+{
+  SCOPED_TRACE("Panda_PositionConstraintOMPLCheck");
 
-//   setPositionConstraints();
-//   testOMPLProjectedStateSpaceConstruction();
-//   // testOMPLStateSampler();
+  setPositionConstraints();
+  testOMPLProjectedStateSpaceConstruction();
 
-//   constraint_.reset();
-//   setPositionConstraintsDifferentLink();
-//   testOMPLProjectedStateSpaceConstruction();
-// }
+  constraint_.reset();
+  setPositionConstraintsDifferentLink();
+  testOMPLProjectedStateSpaceConstruction();
+}
 
-// TEST_F(PandaConstraintTest, OrientationConstraintCreation)
-// {
-//   SCOPED_TRACE("Panda_OrientationConstraintJacobian");
+TEST_F(PandaConstraintTest, OrientationConstraintCreation)
+{
+  SCOPED_TRACE("Panda_OrientationConstraintJacobian");
 
-//   setOrientationConstraints();
-// }
+  setOrientationConstraints();
+}
 /***************************************************************************
  * Run all tests on the Fanuc robot
  * ************************************************************************/
@@ -503,69 +566,73 @@ TEST_F(FanucConstraintTest, testJointLimitConstraints)
   testJointLimitConstraints();
 }
 
-// TEST_F(FanucConstraintTest, InitPositionConstraint)
-// {
-//   setPositionConstraints();
-//   setPositionConstraintsDifferentLink();
-// }
+TEST_F(FanucConstraintTest, InitPositionConstraint)
+{
+  setPositionConstraints();
+  setPositionConstraintsDifferentLink();
+}
 
-// TEST_F(FanucConstraintTest, PositionConstraintJacobian)
-// {
-//   setPositionConstraints();
-//   testJacobian();
+TEST_F(FanucConstraintTest, PositionConstraintJacobian)
+{
+  setPositionConstraints();
+  testJacobian();
 
-//   constraint_.reset();
-//   setPositionConstraintsDifferentLink();
-//   testJacobian();
-// }
+  constraint_.reset();
+  setPositionConstraintsDifferentLink();
+  testJacobian();
+}
 
-// TEST_F(FanucConstraintTest, PositionConstraintOMPLCheck)
-// {
-//   setPositionConstraints();
-//   testOMPLProjectedStateSpaceConstruction();
-//   // testOMPLStateSampler();
+TEST_F(FanucConstraintTest, PositionConstraintOMPLCheck)
+{
+  setPositionConstraints();
+  testOMPLProjectedStateSpaceConstruction();
 
-//   constraint_.reset();
-//   setPositionConstraintsDifferentLink();
-//   testOMPLProjectedStateSpaceConstruction();
-// }
+  constraint_.reset();
+  setPositionConstraintsDifferentLink();
+  testOMPLProjectedStateSpaceConstruction();
+}
+
+TEST_F(FanucConstraintTest, testOMPLStateSampler)
+{
+  testOMPLStateSampler();
+}
 
 /***************************************************************************
  * Run all tests on the PR2's left arm
  * ************************************************************************/
-// class PR2LeftArmConstraintTest : public ConstraintTestBaseClass
-// {
-// protected:
-//   PR2LeftArmConstraintTest() : ConstraintTestBaseClass("pr2", "left_arm")
-//   {
-//   }
-// };
+class PR2LeftArmConstraintTest : public ConstraintTestBaseClass
+{
+protected:
+  PR2LeftArmConstraintTest() : ConstraintTestBaseClass("pr2", "left_arm")
+  {
+  }
+};
 
-// TEST_F(PR2LeftArmConstraintTest, InitPositionConstraint)
-// {
-//   setPositionConstraints();
-//   setPositionConstraintsDifferentLink();
-// }
+TEST_F(PR2LeftArmConstraintTest, InitPositionConstraint)
+{
+  setPositionConstraints();
+  setPositionConstraintsDifferentLink();
+}
 
-// TEST_F(PR2LeftArmConstraintTest, PositionConstraintJacobian)
-// {
-//   setPositionConstraints();
-//   testJacobian();
+TEST_F(PR2LeftArmConstraintTest, PositionConstraintJacobian)
+{
+  setPositionConstraints();
+  testJacobian();
 
-//   constraint_.reset();
-//   setPositionConstraintsDifferentLink();
-//   testJacobian();
-// }
+  constraint_.reset();
+  setPositionConstraintsDifferentLink();
+  testJacobian();
+}
 
-// TEST_F(PR2LeftArmConstraintTest, PositionConstraintOMPLCheck)
-// {
-//   setPositionConstraints();
-//   testOMPLProjectedStateSpaceConstruction();
+TEST_F(PR2LeftArmConstraintTest, PositionConstraintOMPLCheck)
+{
+  setPositionConstraints();
+  testOMPLProjectedStateSpaceConstruction();
 
-//   constraint_.reset();
-//   setPositionConstraintsDifferentLink();
-//   testOMPLProjectedStateSpaceConstruction();
-// }
+  constraint_.reset();
+  setPositionConstraintsDifferentLink();
+  testOMPLProjectedStateSpaceConstruction();
+}
 
 /***************************************************************************
  * MAIN

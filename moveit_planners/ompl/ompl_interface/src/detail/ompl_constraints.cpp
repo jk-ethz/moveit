@@ -306,12 +306,15 @@ ompl::base::ConstraintPtr createOMPLConstraint(robot_model::RobotModelConstPtr r
   {
     auto pos_con = std::make_shared<PositionConstraint>(robot_model, group, num_dofs);
     pos_con->init(constraints);
+    return pos_con;
 
-    auto jl_con = std::make_shared<JointLimitConstraint>(robot_model, group, num_dofs);
-
-    ompl::base::ConstraintIntersectionPtr ci;
-    ci.reset(new ompl::base::ConstraintIntersection(num_dofs, { pos_con, jl_con }));
-    return ci;
+    // adding joint limit constraints explicilty gives a slightly higher projection success rate,
+    // but it is much slower overall.
+    // -------------------------------
+    // auto jl_con = std::make_shared<JointLimitConstraint>(robot_model, group, num_dofs);
+    // ompl::base::ConstraintIntersectionPtr ci;
+    // ci.reset(new ompl::base::ConstraintIntersection(num_dofs, { pos_con, jl_con }));
+    // return ci;
   }
   else if (num_ori_con > 0)
   {
