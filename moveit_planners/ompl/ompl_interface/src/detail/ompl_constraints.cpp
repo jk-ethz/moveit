@@ -202,9 +202,9 @@ void OrientationConstraint::parseConstraintMsg(const moveit_msgs::Constraints& c
   bounds_.clear();
   bounds_ = orientationConstraintMsgToBoundVector(constraints.orientation_constraints.at(0));
   // ROS_INFO_STREAM("Parsing angle-axis constraints");
-  // ROS_INFO_STREAM("Parsed rx / roll constraints" << bounds_[0]);
-  // ROS_INFO_STREAM("Parsed ry / pitch constraints" << bounds_[1]);
-  // ROS_INFO_STREAM("Parsed rz / yaw constraints" << bounds_[2]);
+  ROS_INFO_STREAM("Parsed rx / roll constraints" << bounds_[0]);
+  ROS_INFO_STREAM("Parsed ry / pitch constraints" << bounds_[1]);
+  ROS_INFO_STREAM("Parsed rz / yaw constraints" << bounds_[2]);
 
   tf::quaternionMsgToEigen(constraints.orientation_constraints.at(0).orientation, target_orientation_);
 
@@ -215,19 +215,21 @@ Eigen::VectorXd OrientationConstraint::calcError(const Eigen::Ref<const Eigen::V
 {
   // TODO(jeroendm) I'm not sure yet whether I want the error expressed in the current ee_frame, or target_frame,
   // or world frame. This implementation expressed the error in the end-effector frame.
-  std::cout << x.transpose() << std::endl;
+  // std::cout << x.transpose() << std::endl;
   Eigen::Matrix3d orientation_difference = forwardKinematics(x).rotation().transpose() * target_orientation_;
   Eigen::AngleAxisd aa(orientation_difference);
-  double angle = aa.angle();
-  assert(std::abs(angle) < M_PI);
-  return aa.axis() * angle;
+  // the line below without the Eigen::Matrix3d constructor does not seem to give the same result...
+  // Eigen::AngleAxisd aa(forwardKinematics(x).rotation().transpose() * target_orientation_);
+  // double angle = aa.angle();
+  // assert(std::abs(angle) < M_PI);
+  return aa.axis() * aa.angle();
 }
 
 // Eigen::MatrixXd OrientationConstraint::calcErrorJacobian(const Eigen::Ref<const Eigen::VectorXd>& x) const
 // {
-//   // Eigen::AngleAxisd aa{ forwardKinematics(x).rotation().transpose() * target_orientation_ };
+//   Eigen::AngleAxisd aa{ forwardKinematics(x).rotation().transpose() * target_orientation_ };
 
-//   Eigen::AngleAxisd aa{ forwardKinematics(x).rotation() };
+//   // Eigen::AngleAxisd aa{ forwardKinematics(x).rotation() };
 //   // TODO(jeroendm)
 //   // Find out where the mysterious minus sign comes from
 //   return -angularVelocityToAngleAxis(aa.angle(), aa.axis()) * robotGeometricJacobian(x).bottomRows(3);

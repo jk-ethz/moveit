@@ -284,15 +284,14 @@ public:
   {
   }
 
-  void jacobian(const Eigen::Ref<const Eigen::VectorXd>& joint_values, Eigen::Ref<Eigen::MatrixXd> out) const
-  override
+  void jacobian(const Eigen::Ref<const Eigen::VectorXd>& joint_values, Eigen::Ref<Eigen::MatrixXd> out) const override
   {
     ompl::base::Constraint::jacobian(joint_values, out);
   }
 
   void parseConstraintMsg(const moveit_msgs::Constraints& constraints) override;
   Eigen::VectorXd calcError(const Eigen::Ref<const Eigen::VectorXd>& x) const override;
-  // virtual Eigen::MatrixXd calcErrorJacobian(const Eigen::Ref<const Eigen::VectorXd>& x) const override;
+  // Eigen::MatrixXd calcErrorJacobian(const Eigen::Ref<const Eigen::VectorXd>& x) const override;
 };
 
 /** \brief Conversion matrix to go from angular velocity in the world frame to
