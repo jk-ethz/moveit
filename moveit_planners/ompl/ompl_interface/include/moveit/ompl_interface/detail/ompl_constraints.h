@@ -310,7 +310,6 @@ public:
 
   void parseConstraintMsg(const moveit_msgs::Constraints& constraints) override;
   Eigen::VectorXd calcError(const Eigen::Ref<const Eigen::VectorXd>& x) const override;
-  // virtual Eigen::MatrixXd calcErrorJacobian(const Eigen::Ref<const Eigen::VectorXd>& x) const override;
 };
 
 /** \brief Extract position constraints from the MoveIt message.
@@ -338,13 +337,4 @@ std::vector<Bounds> orientationConstraintMsgToBoundVector(const moveit_msgs::Ori
 std::shared_ptr<BaseConstraint> createOMPLConstraint(robot_model::RobotModelConstPtr robot_model,
                                                      const std::string& group,
                                                      const moveit_msgs::Constraints& constraints);
-
-/** \brief Conversion matrix to go from angular velocity in the world frame to
- * angle axis equivalent.
- *
- * Based on:
- * https://ethz.ch/content/dam/ethz/special-interest/mavt/robotics-n-intelligent-systems/rsl-dam/documents/RobotDynamics2016/RD2016script.pdf
- *
- * */
-Eigen::Matrix3d angularVelocityToAngleAxis(double angle, const Eigen::Vector3d& axis);
 }  // namespace ompl_interface

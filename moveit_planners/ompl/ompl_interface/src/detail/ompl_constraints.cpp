@@ -189,16 +189,6 @@ Eigen::VectorXd OrientationConstraint::calcError(const Eigen::Ref<const Eigen::V
   return aa.axis() * aa.angle();
 }
 
-// Eigen::MatrixXd OrientationConstraint::calcErrorJacobian(const Eigen::Ref<const Eigen::VectorXd>& x) const
-// {
-//   // Eigen::AngleAxisd aa{ forwardKinematics(x).rotation().transpose() * target_orientation_ };
-
-//   Eigen::AngleAxisd aa{ forwardKinematics(x).rotation() };
-//   // TODO(jeroendm)
-//   // Find out where the mysterious minus sign comes from
-//   return -angularVelocityToAngleAxis(aa.angle(), aa.axis()) * robotGeometricJacobian(x).bottomRows(3);
-// }
-
 /************************************
  * MoveIt constraint message parsing
  * **********************************/
@@ -278,26 +268,4 @@ std::shared_ptr<BaseConstraint> createOMPLConstraint(robot_model::RobotModelCons
     return nullptr;
   }
 }
-
-/*********************************************
- * Angular velocity to exponential coordinates
- * *******************************************/
-Eigen::Matrix3d angularVelocityToAngleAxis(double angle, const Eigen::Vector3d& axis)
-{
-  // (short variable names to make math expression readable)
-  // calculate exponential coordinates representation from the angle axis representation
-  Eigen::Vector3d r{ axis * angle };
-
-  // put the exponential coordinates in a skew symmetric matrix
-  Eigen::Matrix3d r_skew;
-  r_skew << 0, -r[2], r[1], r[2], 0, -r[0], -r[1], r[0], 0;
-
-  // calculate the absolute value of the rotation angle as an intermediate value for the complex expression below
-  double t{ std::abs(angle) };
-
-  // calculate to 3x3 conversion matrix to convert an angular velocity into exponential coordinates
-  return Eigen::Matrix3d::Identity() - 0.5 * r_skew +
-         r_skew * r_skew / (t * t) * (1 - 0.5 * t * std::sin(t) / (1 - std::cos(t)));
-}
-
 }  // namespace ompl_interface
