@@ -777,7 +777,12 @@ bool ompl_interface::ModelBasedPlanningContext::solve(double timeout, unsigned i
     ROS_DEBUG_NAMED(LOGNAME, "%s: Solving the planning problem once...", name_.c_str());
     ob::PlannerTerminationCondition ptc = constructPlannerTerminationCondition(timeout, start);
     registerTerminationCondition(ptc);
-    result = ompl_simple_setup_->solve(ptc) == ompl::base::PlannerStatus::EXACT_SOLUTION;
+    // result = ompl_simple_setup_->solve(ptc) == ompl::base::PlannerStatus::EXACT_SOLUTION;
+    // also return approximate solutions
+    ompl::base::PlannerStatus status = ompl_simple_setup_->solve(ptc);
+    if (status == ompl::base::PlannerStatus::EXACT_SOLUTION ||
+        status == ompl::base::PlannerStatus::APPROXIMATE_SOLUTION)
+      result = true;
     last_plan_time_ = ompl_simple_setup_->getLastPlanComputationTime();
     unregisterTerminationCondition();
   }
