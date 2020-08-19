@@ -377,9 +377,15 @@ ompl_interface::ModelBasedPlanningContextPtr ompl_interface::PlanningContextMana
 
     ROS_DEBUG_NAMED(LOGNAME, "Creating new planning context");
     context.reset(new ModelBasedPlanningContext(config.name, context_spec));
+
+    // Do not cache a constrained planning context, as the constraints could be changed
+    // and need to be parsed again.
+    if (factory->getType() != ConstrainedPlanningStateSpace::PARAMETERIZATION_TYPE)
     {
-      std::unique_lock<std::mutex> slock(cached_contexts_->lock_);
-      cached_contexts_->contexts_[std::make_pair(config.name, factory->getType())].push_back(context);
+      {
+        std::unique_lock<std::mutex> slock(cached_contexts_->lock_);
+        cached_contexts_->contexts_[std::make_pair(config.name, factory->getType())].push_back(context);
+      }
     }
   }
 
