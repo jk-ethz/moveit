@@ -169,6 +169,42 @@ Eigen::MatrixXd PositionConstraint::calcErrorJacobian(const Eigen::Ref<const Eig
 }
 
 /******************************************
+ * Equality constraints
+ * ****************************************/
+void EqualityPositionConstraint::parseConstraintMsg(const moveit_msgs::Constraints& constraints)
+{
+  ROS_INFO_STREAM_NAMED(LOGNAME, "Parsing equality position constraint for OMPL constrained state space.");
+  bounds_.clear();
+
+  auto dims = constraints.position_constraints.at(0).constraint_region.primitives.at(0).dimensions;
+
+  // dimension of -1 signifies unconstrained parameter, so set to infinity
+  for (auto& dim : dims)
+  {
+    if (dim < equality_constraint_threshold_)
+      dim = 0.0;
+    else
+      dim = std::numeric_limits<double>::infinity();
+  }
+
+  bounds_ = { { -dims[0] / 2, dims[0] / 2 }, { -dims[1] / 2, dims[1] / 2 }, { -dims[2] / 2, dims[2] / 2 } };
+
+  ROS_INFO_STREAM_NAMED(LOGNAME, "Parsed x constraints" << bounds_[0]);
+  ROS_INFO_STREAM_NAMED(LOGNAME, "Parsed y constraints" << bounds_[1]);
+  ROS_INFO_STREAM_NAMED(LOGNAME, "Parsed z constraints" << bounds_[2]);
+
+  // extract target position and orientation
+  geometry_msgs::Point position =
+      constraints.position_constraints.at(0).constraint_region.primitive_poses.at(0).position;
+  target_position_ << position.x, position.y, position.z;
+  tf::quaternionMsgToEigen(constraints.position_constraints.at(0).constraint_region.primitive_poses.at(0).orientation,
+                           target_orientation_);
+
+  link_name_ = constraints.position_constraints.at(0).link_name;
+  ROS_INFO_STREAM_NAMED(LOGNAME, "Position constraints applied to link: " << link_name_);
+}
+
+/******************************************
  * Orientation constraints
  * ****************************************/
 void OrientationConstraint::parseConstraintMsg(const moveit_msgs::Constraints& constraints)
@@ -291,7 +327,18 @@ std::shared_ptr<BaseConstraint> createOMPLConstraint(robot_model::RobotModelCons
   }
   else if (num_pos_con > 0)
   {
-    auto pos_con = std::make_shared<PositionConstraint>(robot_model, group, num_dofs);
+    ROS_INFO_STREAM("Constraint name: " << constraints.name);
+    BaseConstraintPtr pos_con;
+    if (constraints.name == "use_equality_constraints")
+    {
+      ROS_INFO_STREAM("Using equality position constraints.");
+      pos_con = std::make_shared<EqualityPositionConstraint>(robot_model, group, num_dofs);
+    }
+    else
+    {
+      ROS_INFO_STREAM("Using bounded position constraints.");
+      pos_con = std::make_shared<PositionConstraint>(robot_model, group, num_dofs);
+    }
     pos_con->init(constraints);
     return pos_con;
   }

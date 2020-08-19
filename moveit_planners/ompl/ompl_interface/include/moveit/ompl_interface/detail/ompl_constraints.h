@@ -290,6 +290,53 @@ public:
 };
 
 /******************************************
+ * Equality Position Constraints
+ * ****************************************/
+class EqualityPositionConstraint : public BaseConstraint
+{
+public:
+  EqualityPositionConstraint(robot_model::RobotModelConstPtr robot_model, const std::string& group,
+                             const unsigned int num_dofs)
+    : BaseConstraint(robot_model, group, num_dofs)
+  {
+  }
+  virtual void parseConstraintMsg(const moveit_msgs::Constraints& constraints) override;
+  // virtual Eigen::VectorXd calcError(const Eigen::Ref<const Eigen::VectorXd>& x) const override;
+  // virtual Eigen::MatrixXd calcErrorJacobian(const Eigen::Ref<const Eigen::VectorXd>& x) const override;
+
+  void function(const Eigen::Ref<const Eigen::VectorXd>& joint_values, Eigen::Ref<Eigen::VectorXd> out) const override
+  {
+    Eigen::Vector3d error =
+        target_orientation_.matrix().transpose() * (forwardKinematics(joint_values).translation() - target_position_);
+    out[0] = error[0];
+    out[1] = 0.0;
+    out[2] = 0.0;
+    for (std::size_t dim{ 0 }; dim < 3; ++dim)
+    {
+      if (bounds_[dim].lower == 0.0)
+        out[dim] = error[dim];  // equality constraint dimension
+      else
+        out[dim] = 0.0;  // unbounded dimension
+    }
+  }
+
+  void jacobian(const Eigen::Ref<const Eigen::VectorXd>& joint_values, Eigen::Ref<Eigen::MatrixXd> out) const override
+  {
+    out.setZero();
+    Eigen::MatrixXd jac = target_orientation_.matrix().transpose() * robotGeometricJacobian(joint_values).topRows(3);
+    for (std::size_t dim{ 0 }; dim < 3; ++dim)
+    {
+      if (bounds_[dim].lower == 0.0)
+        out.row(dim) = jac.row(dim);  // equality constraint dimension
+    }
+  }
+
+private:
+  /** \brief Position bounds under this threshold are interpreted as equality constraints, the others as unbounded. **/
+  double equality_constraint_threshold_{ 0.01 };
+};
+
+/******************************************
  * Orientation constraints
  * ****************************************/
 /** \brief Orientation constraints parameterized using exponential coordinates.
