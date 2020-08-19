@@ -268,6 +268,25 @@ public:
   virtual void parseConstraintMsg(const moveit_msgs::Constraints& constraints) override;
   virtual Eigen::VectorXd calcError(const Eigen::Ref<const Eigen::VectorXd>& x) const override;
   virtual Eigen::MatrixXd calcErrorJacobian(const Eigen::Ref<const Eigen::VectorXd>& x) const override;
+
+  // void function(const Eigen::Ref<const Eigen::VectorXd>& joint_values, Eigen::Ref<Eigen::VectorXd> out) const
+  // override
+  // {
+  //   Eigen::Vector3d error =
+  //       target_orientation_.matrix().transpose() * (forwardKinematics(joint_values).translation() -
+  //       target_position_);
+  //   out[0] = error[0];
+  //   out[1] = 0.0;
+  //   out[2] = 0.0;
+  // }
+
+  // void jacobian(const Eigen::Ref<const Eigen::VectorXd>& joint_values, Eigen::Ref<Eigen::MatrixXd> out) const
+  // override
+  // {
+  //   out.setZero();
+  //   Eigen::MatrixXd jac = target_orientation_.matrix().transpose() * robotGeometricJacobian(joint_values).topRows(3);
+  //   out.row(0) = jac.row(0);
+  // }
 };
 
 /******************************************
@@ -303,6 +322,18 @@ public:
   {
   }
 
+  // void function(const Eigen::Ref<const Eigen::VectorXd>& joint_values, Eigen::Ref<Eigen::VectorXd> out) const
+  // override
+  // {
+  //   Eigen::Matrix3d orientation_difference =
+  //       forwardKinematics(joint_values).rotation().transpose() * target_orientation_;
+  //   Eigen::AngleAxisd aa(orientation_difference);
+  //   Eigen::Vector3d error = aa.axis() * aa.angle();
+  //   out[0] = error[0];
+  //   out[1] = error[1];
+  //   out[2] = 0.0;
+  // }
+
   void jacobian(const Eigen::Ref<const Eigen::VectorXd>& joint_values, Eigen::Ref<Eigen::MatrixXd> out) const override
   {
     ompl::base::Constraint::jacobian(joint_values, out);
@@ -337,4 +368,6 @@ std::vector<Bounds> orientationConstraintMsgToBoundVector(const moveit_msgs::Ori
 std::shared_ptr<BaseConstraint> createOMPLConstraint(robot_model::RobotModelConstPtr robot_model,
                                                      const std::string& group,
                                                      const moveit_msgs::Constraints& constraints);
+
+Eigen::Vector3d minNormEquivalent(const Eigen::Vector3d& angles);
 }  // namespace ompl_interface

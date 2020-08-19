@@ -155,12 +155,17 @@ void PositionConstraint::parseConstraintMsg(const moveit_msgs::Constraints& cons
 Eigen::VectorXd PositionConstraint::calcError(const Eigen::Ref<const Eigen::VectorXd>& x) const
 {
   return target_orientation_.matrix().transpose() * (forwardKinematics(x).translation() - target_position_);
+  // Eigen::Vector3d error = forwardKinematics(x).translation() - target_position_;
+  // std::cout << error.transpose() << "\n";
+  // return error;
+  // // return forwardKinematics(x).translation() - target_position_;
 }
 
 Eigen::MatrixXd PositionConstraint::calcErrorJacobian(const Eigen::Ref<const Eigen::VectorXd>& x) const
 {
   // TODO(jeroen) is this rotation necessary?
   return target_orientation_.matrix().transpose() * robotGeometricJacobian(x).topRows(3);
+  // return robotGeometricJacobian(x).topRows(3);
 }
 
 /******************************************
@@ -170,10 +175,10 @@ void OrientationConstraint::parseConstraintMsg(const moveit_msgs::Constraints& c
 {
   bounds_.clear();
   bounds_ = orientationConstraintMsgToBoundVector(constraints.orientation_constraints.at(0));
-  // ROS_INFO_STREAM("Parsing angle-axis constraints");
-  // ROS_INFO_STREAM("Parsed rx / roll constraints" << bounds_[0]);
-  // ROS_INFO_STREAM("Parsed ry / pitch constraints" << bounds_[1]);
-  // ROS_INFO_STREAM("Parsed rz / yaw constraints" << bounds_[2]);
+  ROS_INFO_STREAM("Parsing orientation constraints");
+  ROS_INFO_STREAM("Parsed rx / roll constraints" << bounds_[0]);
+  ROS_INFO_STREAM("Parsed ry / pitch constraints" << bounds_[1]);
+  ROS_INFO_STREAM("Parsed rz / yaw constraints" << bounds_[2]);
 
   tf::quaternionMsgToEigen(constraints.orientation_constraints.at(0).orientation, target_orientation_);
 
@@ -182,12 +187,38 @@ void OrientationConstraint::parseConstraintMsg(const moveit_msgs::Constraints& c
 
 Eigen::VectorXd OrientationConstraint::calcError(const Eigen::Ref<const Eigen::VectorXd>& x) const
 {
-  Eigen::Matrix3d orientation_difference = forwardKinematics(x).rotation().transpose() * target_orientation_;
+  Eigen::Matrix3d orientation_difference = forwardKinematics(x).linear().transpose() * target_orientation_;
   Eigen::AngleAxisd aa(orientation_difference);
   // the direct version below does not work
   // Eigen::AngleAxisd aa(forwardKinematics(x).rotation().transpose() * target_orientation_);
+
+  // Eigen::Vector3d error = aa.axis() * aa.angle();
+  // std::cout << error.transpose() << "\n";
+  // // return minNormEquivalent(error);
+  // return error;
   return aa.axis() * aa.angle();
 }
+
+// Eigen::VectorXd OrientationConstraint::calcError(const Eigen::Ref<const Eigen::VectorXd>& x) const
+// {
+//   // Eigen::Matrix3d orientation_difference = forwardKinematics(x).rotation().transpose() * target_orientation_;
+//   // Eigen::Quaterniond quat(orientation_difference);
+//   // Eigen::Quaterniond quat = forwardKinematics(x).rotation().transpose() * target_orientation_;
+//   Eigen::Quaterniond quat(forwardKinematics(x).rotation().transpose());
+//   quat *= target_orientation_;
+//   Eigen::Vector3d error;
+//   error << quat.x(), quat.y(), quat.z();
+//   // the direct version below does not work
+//   // Eigen::AngleAxisd aa(forwardKinematics(x).rotation().transpose() * target_orientation_);
+//   return error;
+// }
+
+// Eigen::VectorXd OrientationConstraint::calcError(const Eigen::Ref<const Eigen::VectorXd>& x) const
+// {
+//   Eigen::Matrix3d orientation_difference = forwardKinematics(x).linear().transpose() * target_orientation_;
+//   // return minNormEquivalent(error);
+//   return orientation_difference.eulerAngles(0, 1, 2);
+// }
 
 /************************************
  * MoveIt constraint message parsing
@@ -245,6 +276,14 @@ std::shared_ptr<BaseConstraint> createOMPLConstraint(robot_model::RobotModelCons
 
   if (num_pos_con > 0 && num_ori_con > 0)
   {
+    // auto pos_con = std::make_shared<PositionConstraint>(robot_model, group, num_dofs);
+    // pos_con->init(constraints);
+    // auto ori_con = std::make_shared<OrientationConstraint>(robot_model, group, num_dofs);
+    // ori_con->init(constraints);
+
+    // ompl::base::ConstraintIntersectionPtr ci;
+    // ci.reset(new ompl::base::ConstraintIntersection(num_dofs, { pos_con, ori_con }));
+    // return ci;
     ROS_ERROR_NAMED(
         LOGNAME,
         "Combining position and orientation constraints not implemented yet for OMPL's constrained state space.");
@@ -267,5 +306,26 @@ std::shared_ptr<BaseConstraint> createOMPLConstraint(robot_model::RobotModelCons
     ROS_ERROR_NAMED(LOGNAME, "No path constraints found in planning request.");
     return nullptr;
   }
+}
+
+Eigen::Vector3d minNormEquivalent(const Eigen::Vector3d& angles)
+{
+  Eigen::Matrix<double, 9, 3> m;
+  double x(angles.x()), y(angles.y()), z(angles.z());
+  // clang-format off
+   m <<  x,  y, z,
+        x - M_PI, -y - M_PI, z - M_PI,
+        x - M_PI, -y - M_PI, z + M_PI,
+        x - M_PI, -y + M_PI, z - M_PI,
+        x - M_PI, -y + M_PI, z + M_PI,
+        x + M_PI, -y - M_PI, z - M_PI,
+        x + M_PI, -y - M_PI, z + M_PI,
+        x + M_PI, -y + M_PI, z - M_PI,
+        x + M_PI, -y + M_PI, z + M_PI;
+  // clang-format on
+  // get the index of the row with the lowest norm
+  Eigen::VectorXd::Index index;
+  m.rowwise().norm().minCoeff(&index);
+  return m.row(index);
 }
 }  // namespace ompl_interface
