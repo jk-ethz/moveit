@@ -265,6 +265,53 @@ public:
   virtual Eigen::MatrixXd calcErrorJacobian(const Eigen::Ref<const Eigen::VectorXd>& x) const override;
 };
 
+/** \brief Joint limit constraints
+ *
+ * Taking into account joint limits in the constraint projection method is not trivial.
+ * Enforcing the bounds after projecting end-effector constraints often results in constraint violation.
+ * (In some simple experiments, it occurs +- / 80 % of the time.)
+ *
+ * Therefore, this class explicitly models the joint limits as configuration space constraints,
+ * that are combined with any other constraints provided.
+ *
+ * Assume all joint are position bounded for now.
+ * Assume all joint models only have one degree of freedom for now.
+ * */
+class JointLimitConstraint : public ompl::base::Constraint
+{
+public:
+  JointLimitConstraint(robot_model::RobotModelConstPtr robot_model, const std::string& group,
+                       const unsigned int num_dofs);
+  virtual void function(const Eigen::Ref<const Eigen::VectorXd>& joint_values, Eigen::Ref<Eigen::VectorXd> out) const;
+  virtual void jacobian(const Eigen::Ref<const Eigen::VectorXd>& joint_values, Eigen::Ref<Eigen::MatrixXd> out) const;
+
+private:
+  /** \brief Upper and lower bounds on all the joints. */
+  std::vector<Bounds> bounds_;
+};
+
+/******************************************
+ * Position constraints
+ * ****************************************/
+/** \brief Box shaped position constraints
+ *
+ * Reads bounds on x, y and z position from a position constraint
+ * at constraint_region.primitives[0].dimensions.
+ * Where the primitive has to be of type `shape_msgs/SolidPrimitive.BOX`.
+ *
+ * These bounds are applied around the nominal position and orientation
+ * of the box.
+ * */
+class PositionConstraintWithLimits : public BaseConstraint
+{
+public:
+  PositionConstraintWithLimits(const robot_model::RobotModelConstPtr& robot_model, const std::string& group,
+                               const unsigned int num_dofs);
+  virtual void parseConstraintMsg(const moveit_msgs::Constraints& constraints) override;
+  virtual Eigen::VectorXd calcError(const Eigen::Ref<const Eigen::VectorXd>& x) const override;
+  virtual Eigen::MatrixXd calcErrorJacobian(const Eigen::Ref<const Eigen::VectorXd>& x) const override;
+};
+
 /******************************************
  * Equality Position Constraints
  * ****************************************/

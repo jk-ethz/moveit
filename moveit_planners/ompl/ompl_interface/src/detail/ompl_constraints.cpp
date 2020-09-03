@@ -168,6 +168,107 @@ Eigen::MatrixXd PositionConstraint::calcErrorJacobian(const Eigen::Ref<const Eig
 }
 
 /******************************************
+ * Joint limit constraints
+ * ****************************************/
+JointLimitConstraint::JointLimitConstraint(robot_model::RobotModelConstPtr robot_model, const std::string& group,
+                                           const unsigned int num_dofs)
+  : ompl::base::Constraint(num_dofs, num_dofs)
+{
+  moveit::core::JointBoundsVector joint_model_bounds =
+      robot_model->getJointModelGroup(group)->getActiveJointModelsBounds();
+
+  for (auto& joint_bounds : joint_model_bounds)
+  {
+    assert(joint_bounds->size() == 1);
+    assert(joint_bounds->at(0).position_bounded_);
+    bounds_.push_back({ joint_bounds->at(0).min_position_, joint_bounds->at(0).max_position_ });
+    ROS_INFO_STREAM("Joint limit: " << bounds_.back());
+  }
+}
+
+void JointLimitConstraint::function(const Eigen::Ref<const Eigen::VectorXd>& joint_values,
+                                    Eigen::Ref<Eigen::VectorXd> out) const
+{
+  out.setZero();
+  for (std::size_t i{ 0 }; i < bounds_.size(); ++i)
+  {
+    out[i] = bounds_[i].penalty(joint_values[i]);
+  }
+}
+
+void JointLimitConstraint::jacobian(const Eigen::Ref<const Eigen::VectorXd>& joint_values,
+                                    Eigen::Ref<Eigen::MatrixXd> out) const
+{
+  out.setZero();  // all of-diagonal elements are always zero
+  for (std::size_t i{ 0 }; i < bounds_.size(); ++i)
+  {
+    // diagonal elements are either 0, -1 or +1
+    out(i, i) = bounds_[i].derivative(joint_values[i]);
+  }
+}
+
+/******************************************
+ * Position constraints with joint limits
+ * ****************************************/
+PositionConstraintWithLimits::PositionConstraintWithLimits(const robot_model::RobotModelConstPtr& robot_model,
+                                                           const std::string& group, const unsigned int num_dofs)
+  : BaseConstraint(robot_model, group, num_dofs, num_dofs + 3)
+{
+  // parse joint limits
+  moveit::core::JointBoundsVector joint_model_bounds =
+      robot_model->getJointModelGroup(group)->getActiveJointModelsBounds();
+
+  for (auto& joint_bounds : joint_model_bounds)
+  {
+    assert(joint_bounds->size() == 1);
+    assert(joint_bounds->at(0).position_bounded_);
+    bounds_.push_back({ joint_bounds->at(0).min_position_, joint_bounds->at(0).max_position_ });
+    ROS_INFO_STREAM_NAMED(LOGNAME, "Joint limit: " << bounds_.back());
+  }
+}
+
+void PositionConstraintWithLimits::parseConstraintMsg(const moveit_msgs::Constraints& constraints)
+{
+  ROS_INFO_STREAM_NAMED(LOGNAME, "Parsing position constraint for OMPL constrained state space.");
+  auto bounds = positionConstraintMsgToBoundVector(constraints.position_constraints.at(0));
+  for (std::size_t i; i < 3; ++i)
+  {
+    bounds_.push_back(bounds[i]);
+  }
+  ROS_INFO_STREAM_NAMED(LOGNAME, "Parsed x constraints" << bounds_[bounds_.size() - 3]);
+  ROS_INFO_STREAM_NAMED(LOGNAME, "Parsed y constraints" << bounds_[bounds_.size() - 2]);
+  ROS_INFO_STREAM_NAMED(LOGNAME, "Parsed z constraints" << bounds_[bounds_.size() - 1]);
+  ROS_INFO_STREAM_NAMED(LOGNAME, "Total number of bounds: " << bounds_.size());
+
+  // extract target position and orientation
+  geometry_msgs::Point position =
+      constraints.position_constraints.at(0).constraint_region.primitive_poses.at(0).position;
+  target_position_ << position.x, position.y, position.z;
+  tf::quaternionMsgToEigen(constraints.position_constraints.at(0).constraint_region.primitive_poses.at(0).orientation,
+                           target_orientation_);
+
+  link_name_ = constraints.position_constraints.at(0).link_name;
+  ROS_INFO_STREAM_NAMED(LOGNAME, "Position constraints applied to link: " << link_name_);
+}
+
+Eigen::VectorXd PositionConstraintWithLimits::calcError(const Eigen::Ref<const Eigen::VectorXd>& x) const
+{
+  Eigen::VectorXd error(x.size() + 3);
+  error << x, (target_orientation_.matrix().transpose() * (forwardKinematics(x).translation() - target_position_));
+  return error;
+}
+
+Eigen::MatrixXd PositionConstraintWithLimits::calcErrorJacobian(const Eigen::Ref<const Eigen::VectorXd>& x) const
+{
+  Eigen::MatrixXd jac(x.size() + 3, x.size());
+  jac.setZero();
+  for (unsigned int i; i < x.size(); ++i)
+    jac(i, i) = 1.0;
+  jac.bottomRows(3) = target_orientation_.matrix().transpose() * robotGeometricJacobian(x).topRows(3);
+  return jac;
+}
+
+/******************************************
  * Equality constraints
  * ****************************************/
 EqualityPositionConstraint::EqualityPositionConstraint(const robot_model::RobotModelConstPtr& robot_model,
