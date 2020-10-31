@@ -1,7 +1,7 @@
 /*********************************************************************
  * Software License Agreement (BSD License)
  *
- *  Copyright (c) 2019, Bielefeld University
+ *  Copyright (c) 2011, Willow Garage, Inc.
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -14,7 +14,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of Bielefeld University nor the names of its
+ *   * Neither the name of the copyright holder nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -32,42 +32,30 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *********************************************************************/
 
-#pragma once
+#include <moveit/collision_detection/collision_common.h>
 
-/** The following macros allow to temporarily disable specific warnings,
- *  which in turn allows us to compile the MoveIt code base with rather strict
- *  compiler warnings, and still avoid corresponding issues in external sources.
- *  Just wrap an offending include with:
- *
- *  DIAGNOSTIC_PUSH
- *  SILENT_UNUSED_PARAM
- *  #include <offender.h>
- *  DIAGNOSTIC_POP
- *
- *  The push and pop operations ensure that the old status is restored afterwards.
- */
+static const char LOGNAME[] = "collision_common";
+constexpr size_t LOG_THROTTLE_PERIOD = 5;
 
-#if defined(_MSC_VER)
-#define DIAGNOSTIC_PUSH __pragma(warning(push))
-#define DIAGNOSTIC_POP __pragma(warning(pop))
-#define SILENT_UNUSED_PARAM __pragma(warning(disable : 4100))
+namespace collision_detection
+{
+void CollisionResult::print() const
+{
+  if (!contacts.empty())
+  {
+    ROS_WARN_STREAM_THROTTLE_NAMED(LOG_THROTTLE_PERIOD, LOGNAME,
+                                   "Objects in collision (printing 1st of "
+                                       << contacts.size() << " pairs): " << contacts.begin()->first.first << ", "
+                                       << contacts.begin()->first.second);
 
-#elif defined(__GNUC__) || defined(__clang__)
-#define DO_PRAGMA(X) _Pragma(#X)
-#define DIAGNOSTIC_PUSH DO_PRAGMA(GCC diagnostic push)
-#define DIAGNOSTIC_POP DO_PRAGMA(GCC diagnostic pop)
+    // Log all collisions at the debug level
+    ROS_DEBUG_STREAM_THROTTLE_NAMED(LOG_THROTTLE_PERIOD, LOGNAME, "Objects in collision:");
+    for (const auto& contact : contacts)
+    {
+      ROS_DEBUG_STREAM_THROTTLE_NAMED(LOG_THROTTLE_PERIOD, LOGNAME,
+                                      "\t" << contact.first.first << ", " << contact.first.second);
+    }
+  }
+}
 
-#if defined(__clang__)
-#define SILENT_UNUSED_PARAM DO_PRAGMA(GCC diagnostic ignored "-Wunused-parameter")
-#else
-#define SILENT_UNUSED_PARAM                                                                                            \
-  DO_PRAGMA(GCC diagnostic ignored "-Wunused-parameter")                                                               \
-  DO_PRAGMA(GCC diagnostic ignored "-Wunused-but-set-parameter")
-#endif
-
-#else
-#define DIAGNOSTIC_PUSH
-#define DIAGNOSTIC_POP
-#define SILENT_UNUSED_PARAM
-
-#endif
+}  // namespace collision_detection

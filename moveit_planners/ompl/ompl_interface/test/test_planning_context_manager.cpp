@@ -34,10 +34,23 @@
 
 /* Author: Jeroen De Maeyer */
 
-#include "load_test_robot.h"
+/** Test the creation of a ModelBasedPlanningContext through the PlanningContextManager.
+ *
+ * The tests use a default robot state as start state, and then moves the last joint 0.1 radians/meters to create a
+ * joint goal. This creates an extremely simple planning problem to test general mechanics of the interface.
+ *
+ * In the test with path constraints, we create an orientation constraint around the start orientation of the
+ * end-effector, with a tolerance on the rotation larger than the change in the last joint of the goal state.
+ * This makes sure the path constraints are easy to satisfy.
+ *
+ * TODO(jeroendm) I also tried something similar with position constraints, but get a segmentation fault
+ * that occurs in the 'geometric_shapes' package, in the method 'useDimensions' in 'bodies.h'.
+ * git permalink:
+ * https://github.com/ros-planning/geometric_shapes/blob/df0478870b8592ce789ee1919f3124058c4327d7/include/geometric_shapes/bodies.h#L196
+ *
+ **/
 
-// #include <limits>
-// #include <ostream>
+#include "load_test_robot.h"
 
 #include <gtest/gtest.h>
 
@@ -52,9 +65,6 @@
 
 #include <moveit/ompl_interface/parameterization/joint_space/joint_model_state_space.h>
 #include <moveit/ompl_interface/parameterization/joint_space/constrained_planning_state_space.h>
-
-/** \brief Use this flag to turn on extra output on std::cout for debugging. **/
-// constexpr bool VERBOSE{ true };
 
 /** \brief Generic implementation of the tests that can be executed on different robots. **/
 class TestPlanningContext : public ompl_interface_testing::LoadTestRobot, public testing::Test
@@ -89,13 +99,18 @@ public:
     // see if it returns the expected planning context
     auto pc = pcm.getPlanningContext(planning_scene_, request, error_code, node_handle_, false);
 
+    // the planning context should have a simple setup created
     EXPECT_NE(pc->getOMPLSimpleSetup(), nullptr);
-    auto ss = dynamic_cast<ompl_interface::JointModelStateSpace*>(pc->getOMPLStateSpace().get());
-    EXPECT_NE(ss, nullptr);
 
+    // the OMPL state space in the planning context should be of type JointModelStateSpace
+    EXPECT_NE(dynamic_cast<ompl_interface::JointModelStateSpace*>(pc->getOMPLStateSpace().get()), nullptr);
+
+    // there did not magically appear path constraints in the planning context
+    EXPECT_TRUE(pc->getPathConstraints()->empty());
+
+    // solve the planning problem
     planning_interface::MotionPlanDetailedResponse res;
-    bool success = pc->solve(res);
-    EXPECT_TRUE(success);
+    ASSERT_TRUE(pc->solve(res));
   }
 
   void testPathConstraints(const std::vector<double>& start, const std::vector<double>& goal)
@@ -117,32 +132,83 @@ public:
     // create path constraints around start state,  to make sure they are satisfied
     robot_state_->setJointGroupPositions(joint_model_group_, start);
     Eigen::Isometry3d ee_pose = robot_state_->getGlobalLinkTransform(ee_link_name_);
-    // geometry_msgs::Quaternion ee_orientation;
-    // tf::quaternionEigenToMsg(Eigen::Quaterniond(ee_pose.rotation()), ee_orientation);
-    // request.path_constraints.orientation_constraints.push_back(createOrientationConstraint(ee_orientation));
-
-    request.path_constraints.position_constraints.push_back(createPositionConstraint(
-        { ee_pose.translation().x(), ee_pose.translation().y(), ee_pose.translation().z() }, { 1.0, 1.0, 1.0 }));
+    geometry_msgs::Quaternion ee_orientation;
+    tf::quaternionEigenToMsg(Eigen::Quaterniond(ee_pose.rotation()), ee_orientation);
 
     // setup the planning context manager
     ompl_interface::PlanningContextManager pcm(robot_model_, constraint_sampler_manager_);
     pcm.setPlannerConfigurations(pconfig_map);
 
-    // see if it returns the expected planning context
+    // ORIENTATION CONSTRAINTS
+    // ***********************
+    request.path_constraints.orientation_constraints.push_back(createOrientationConstraint(ee_orientation));
+
+    // See if the planning context manager returns the expected planning context
     auto pc = pcm.getPlanningContext(planning_scene_, request, error_code, node_handle_, false);
 
     EXPECT_NE(pc->getOMPLSimpleSetup(), nullptr);
 
-    // As the joint_model_group_ has not IK solver initialized, we still get a joint model state space here,
-    // so not really a good test. TODO(jeroendm)
-    auto ss = dynamic_cast<ompl_interface::JointModelStateSpace*>(pc->getOMPLStateSpace().get());
-    EXPECT_NE(ss, nullptr);
+    // As the joint_model_group_ has no IK solver initialized, we expect a joint model state space
+    EXPECT_NE(dynamic_cast<ompl_interface::JointModelStateSpace*>(pc->getOMPLStateSpace().get()), nullptr);
 
-    planning_interface::MotionPlanDetailedResponse res;
-    bool success = pc->solve(res);
-    EXPECT_TRUE(success);
+    planning_interface::MotionPlanDetailedResponse response;
+    ASSERT_TRUE(pc->solve(response));
+
+    // Are the path constraints created in the planning context?
+    auto path_constraints = pc->getPathConstraints();
+    EXPECT_FALSE(path_constraints->empty());
+    EXPECT_EQ(path_constraints->getOrientationConstraints().size(), 1u);
+    EXPECT_TRUE(path_constraints->getPositionConstraints().empty());
+    EXPECT_TRUE(path_constraints->getJointConstraints().empty());
+    EXPECT_TRUE(path_constraints->getVisibilityConstraints().empty());
+
+    // Check if all the states in the solution satisfy the path constraints.
+    // A detailed response returns 3 solutions: the ompl solution, the simplified solution and the interpolated
+    // solution. We test all of them here.
+    for (const robot_trajectory::RobotTrajectoryPtr& trajectory : response.trajectory_)
+    {
+      for (std::size_t pt_index = { 0 }; pt_index < trajectory->getWayPointCount(); ++pt_index)
+      {
+        EXPECT_TRUE(path_constraints->decide(trajectory->getWayPoint(pt_index)).satisfied);
+      }
+    }
+
+    // POSITION CONSTRAINTS
+    // ***********************
+    request.path_constraints.orientation_constraints.clear();
+    request.path_constraints.position_constraints.push_back(createPositionConstraint(
+        { ee_pose.translation().x(), ee_pose.translation().y(), ee_pose.translation().z() }, { 0.1, 0.1, 0.1 }));
+
+    // See if the planning context manager returns the expected planning context
+    pc = pcm.getPlanningContext(planning_scene_, request, error_code, node_handle_, false);
+
+    EXPECT_NE(pc->getOMPLSimpleSetup(), nullptr);
+
+    // As the joint_model_group_ has no IK solver initialized, we expect a joint model state space
+    EXPECT_NE(dynamic_cast<ompl_interface::JointModelStateSpace*>(pc->getOMPLStateSpace().get()), nullptr);
+
+    // Create a new response, because the solve method does not clear the given respone
+    planning_interface::MotionPlanDetailedResponse response2;
+    ASSERT_TRUE(pc->solve(response2));
+
+    // Are the path constraints created in the planning context?
+    path_constraints = pc->getPathConstraints();
+    EXPECT_FALSE(path_constraints->empty());
+    EXPECT_EQ(path_constraints->getPositionConstraints().size(), 1u);
+    EXPECT_TRUE(path_constraints->getOrientationConstraints().empty());
+
+    // Check if all the states in the solution satisfy the path constraints.
+    // A detailed response returns 3 solutions: the ompl solution, the simplified solution and the interpolated
+    // solution. We test all of them here.
+    for (const robot_trajectory::RobotTrajectoryPtr& trajectory : response2.trajectory_)
+    {
+      for (std::size_t pt_index = { 0 }; pt_index < trajectory->getWayPointCount(); ++pt_index)
+      {
+        EXPECT_TRUE(path_constraints->decide(trajectory->getWayPoint(pt_index)).satisfied);
+      }
+    }
   }
-
+  
   void testOMPLConstrainedPlanning(const std::vector<double>& start, const std::vector<double>& goal)
   {
     // create all the test specific input necessary to make the getPlanningContext call possible
@@ -222,7 +288,6 @@ protected:
                                                       const std::vector<double>& goal) const
   {
     planning_interface::MotionPlanRequest request;
-
     request.group_name = group_name_;
     request.allowed_planning_time = 5.0;
 
@@ -260,13 +325,27 @@ protected:
     box_pose.position.z = position[2];
     box_pose.orientation.w = 1.0;
 
-    moveit_msgs::PositionConstraint position_constraint;
-    position_constraint.header.frame_id = base_link_name_;
-    position_constraint.link_name = ee_link_name_;
-    position_constraint.constraint_region.primitives.push_back(box);
-    position_constraint.constraint_region.primitive_poses.push_back(box_pose);
+    moveit_msgs::PositionConstraint pc;
+    pc.header.frame_id = base_link_name_;
+    pc.link_name = ee_link_name_;
+    pc.constraint_region.primitives.push_back(box);
+    pc.constraint_region.primitive_poses.push_back(box_pose);
 
-    return position_constraint;
+    return pc;
+  }
+
+  /** \brief Helper function to create a orientation constraint. **/
+  moveit_msgs::OrientationConstraint createOrientationConstraint(const geometry_msgs::Quaternion& nominal_orientation)
+  {
+    moveit_msgs::OrientationConstraint oc;
+    oc.header.frame_id = base_link_name_;
+    oc.link_name = ee_link_name_;
+    oc.orientation = nominal_orientation;
+    oc.absolute_x_axis_tolerance = 0.3;
+    oc.absolute_y_axis_tolerance = 0.3;
+    oc.absolute_z_axis_tolerance = 0.3;
+
+    return oc;
   }
 
   ompl_interface::ModelBasedStateSpacePtr state_space_;
@@ -280,6 +359,8 @@ protected:
    * load the default KDL plugin? **/
   // std::shared_ptr<kinematics::KinematicsBase> ik_plugin_;
 
+  /** we need a node handle to call getPlanningRequest, but it is never used, as we disable the
+   * 'use_constraints_approximation' option. **/
   ros::NodeHandle node_handle_;
 };
 

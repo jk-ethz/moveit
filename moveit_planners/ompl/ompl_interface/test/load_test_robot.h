@@ -42,11 +42,9 @@
 
 namespace ompl_interface_testing
 {
-/** \brief Helper class to implement tests in a generic way to run them on multiple robots.
+/** \brief Robot independent test class setup
  *
- * based on
- * https://stackoverflow.com/questions/38207346/specify-constructor-arguments-for-a-google-test-fixture/38218657
- * (answer by PiotrNycz)
+ * The desired robot tests can be impelmented in a derived class in a generic way.
  *
  * It is implemented this way to avoid the ros specific test framework
  * outside moveit_ros.
@@ -55,6 +53,10 @@ namespace ompl_interface_testing
  * and reading the robot settings from the parameter server.
  * Then we have several rostest launch files that load the parameters
  * for a specific robot and run the same compiled tests for all robots.)
+ *
+ * based on
+ * https://stackoverflow.com/questions/38207346/specify-constructor-arguments-for-a-google-test-fixture/38218657
+ * (answer by PiotrNycz)
  *
  *   --- example.cpp ---
  *
@@ -92,7 +94,7 @@ namespace ompl_interface_testing
  *   --- end example.cpp ---
  *
  *
- **/
+ * */
 class LoadTestRobot
 {
 protected:
