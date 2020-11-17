@@ -69,7 +69,7 @@ if(CATKIN_ENABLE_TESTING)
   add_rostest_gtest(test_planning_context_manager
     test/test_planning_context_manager.test
     test/test_planning_context_manager.cpp)
-  target_link_libraries(test_planning_context_manager ${MOVEIT_LIB_NAME} ${OMPL_LIBRARIES} ${catkin_LIBRARIES})
+  target_link_libraries(test_planning_context_manager ${MOVEIT_LIB_NAME} ${OMPL_LIBRARIES} ${catkin_LIBRARIES} ${eigen_conversions_LIBRARIES})
   
   catkin_add_gtest(test_state_validity_checker test/test_state_validity_checker.cpp)
   target_link_libraries(test_state_validity_checker ${MOVEIT_LIB_NAME} ${OMPL_LIBRARIES} ${catkin_LIBRARIES})
