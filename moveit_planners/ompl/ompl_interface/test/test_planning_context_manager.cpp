@@ -208,7 +208,7 @@ public:
       }
     }
   }
-  
+
   void testOMPLConstrainedPlanning(const std::vector<double>& start, const std::vector<double>& goal)
   {
     // create all the test specific input necessary to make the getPlanningContext call possible
