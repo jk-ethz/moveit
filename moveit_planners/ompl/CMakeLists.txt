@@ -21,6 +21,7 @@ find_package(catkin REQUIRED COMPONENTS
   pluginlib
   tf2_ros
   dynamic_reconfigure
+  eigen_conversions
   )
 
 find_package(ompl REQUIRED)
