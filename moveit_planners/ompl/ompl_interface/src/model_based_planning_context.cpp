@@ -85,6 +85,7 @@ ompl_interface::ModelBasedPlanningContext::ModelBasedPlanningContext(const std::
   , interpolate_(true)
   , hybridize_(true)
 {
+  complete_initial_robot_state_.setToDefaultValues();  // avoid uninitialized memory
   complete_initial_robot_state_.update();
   ompl_simple_setup_->getStateSpace()->computeSignature(space_signature_);
   ompl_simple_setup_->getStateSpace()->setStateSamplerAllocator(
@@ -206,11 +207,23 @@ ompl_interface::ModelBasedPlanningContext::allocPathConstrainedSampler(const omp
 
 void ompl_interface::ModelBasedPlanningContext::configure()
 {
-  // convert the input state to the corresponding OMPL state
-  ompl::base::ScopedState<> ompl_start_state(spec_.state_space_);
-  spec_.state_space_->copyToOMPLState(ompl_start_state.get(), getCompleteInitialRobotState());
-  ompl_simple_setup_->setStartState(ompl_start_state);
-  ompl_simple_setup_->setStateValidityChecker(ob::StateValidityCheckerPtr(new StateValidityChecker(this)));
+  if (spec_.constrained_state_space_)
+  {
+    // convert the input state to the corresponding OMPL state
+    ompl::base::ScopedState<> ompl_start_state(spec_.constrained_state_space_);
+    spec_.state_space_->copyToOMPLState(ompl_start_state.get(), getCompleteInitialRobotState());
+    ompl_simple_setup_->setStartState(ompl_start_state);
+    ompl_simple_setup_->setStateValidityChecker(
+        ob::StateValidityCheckerPtr(std::make_shared<ConstrainedPlanningStateValidityChecker>(this)));
+  }
+  else
+  {
+    // convert the input state to the corresponding OMPL state
+    ompl::base::ScopedState<> ompl_start_state(spec_.state_space_);
+    spec_.state_space_->copyToOMPLState(ompl_start_state.get(), getCompleteInitialRobotState());
+    ompl_simple_setup_->setStartState(ompl_start_state);
+    ompl_simple_setup_->setStateValidityChecker(std::make_shared<StateValidityChecker>(this));
+  }
 
   if (path_constraints_ && spec_.constraints_library_)
   {
