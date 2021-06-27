@@ -247,6 +247,10 @@ void ompl_interface::ModelBasedPlanningContext::useConfig()
   if (config.empty())
     return;
   std::map<std::string, std::string> cfg = config;
+  for(auto it = cfg.cbegin(); it != cfg.cend(); ++it)
+  {
+    std::cout << "ModelBasedPlanningContext Config: " << it->first << " " << it->second << "\n";
+  }
 
   // set the distance between waypoints when interpolating and collision checking.
   auto it = cfg.find("longest_valid_segment_fraction");
@@ -701,6 +705,10 @@ bool ompl_interface::ModelBasedPlanningContext::solve(double timeout, unsigned i
       ob::PlannerTerminationCondition ptc =
           ob::timedPlannerTerminationCondition(timeout - ompl::time::seconds(ompl::time::now() - start));
       registerTerminationCondition(ptc);
+      if (hybridize_)
+        ROS_INFO("Using hybridization");
+      else
+        ROS_INFO("Not using hybridization");
       result = ompl_parallel_plan_.solve(ptc, 1, count, hybridize_) == ompl::base::PlannerStatus::EXACT_SOLUTION;
       last_plan_time_ = ompl::time::seconds(ompl::time::now() - start);
       unregisterTerminationCondition();
