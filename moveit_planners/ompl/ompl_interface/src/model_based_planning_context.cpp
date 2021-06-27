@@ -729,6 +729,10 @@ bool ompl_interface::ModelBasedPlanningContext::solve(double timeout, unsigned i
         else
           for (unsigned int i = 0; i < max_planning_threads_; ++i)
             ompl_parallel_plan_.addPlanner(ompl::tools::SelfConfig::getDefaultPlanner(ompl_simple_setup_->getGoal()));
+        if (hybridize_)
+          ROS_INFO("Using hybridization");
+        else
+          ROS_INFO("Not using hybridization");
         bool r = ompl_parallel_plan_.solve(ptc, 1, count, hybridize_) == ompl::base::PlannerStatus::EXACT_SOLUTION;
         result = result && r;
       }
@@ -742,6 +746,10 @@ bool ompl_interface::ModelBasedPlanningContext::solve(double timeout, unsigned i
         else
           for (int i = 0; i < n; ++i)
             ompl_parallel_plan_.addPlanner(ompl::tools::SelfConfig::getDefaultPlanner(ompl_simple_setup_->getGoal()));
+        if (hybridize_)
+          ROS_INFO("Using hybridization");
+        else
+          ROS_INFO("Not using hybridization");
         bool r = ompl_parallel_plan_.solve(ptc, 1, count, hybridize_) == ompl::base::PlannerStatus::EXACT_SOLUTION;
         result = result && r;
       }
