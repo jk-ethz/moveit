@@ -95,13 +95,14 @@ constraint_samplers::ConstraintSamplerManager::selectDefaultSampler(const planni
     }
 
     // check if every joint is covered (constrained) by just joint samplers
-    bool full_coverage = true;
-    for (std::map<std::string, bool>::iterator it = joint_coverage.begin(); it != joint_coverage.end(); ++it)
+    bool full_coverage = false;
+    // This does not work with the Panda robot currently
+    /*for (std::map<std::string, bool>::iterator it = joint_coverage.begin(); it != joint_coverage.end(); ++it)
       if (!it->second)
       {
         full_coverage = false;
         break;
-      }
+      }*/
 
     // if we have constrained every joint, then we just use a sampler using these constraints
     if (full_coverage)
